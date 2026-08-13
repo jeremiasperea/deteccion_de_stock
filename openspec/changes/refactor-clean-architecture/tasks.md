@@ -60,18 +60,20 @@ This repository was `git init`-ed locally this session and **has no remote confi
 - [x] 0.3 **ORCHESTRATOR OVERRIDE — split install.** `requirements.txt` still pins everything per D-G (`flet>=0.84.0,<0.86.0` + floors for opencv-python/ultralytics/pandas/numpy), but only `flet` was installed into `.venv-linux/` in Phase 0 — `opencv-python`, `ultralytics`, `pandas`, `numpy` are multi-GB and not needed until Phase 3's adapters. Added **`requirements-dev.txt`** (`pytest`, `pytest-cov`, `ruff`, `mypy`) for the tooling actually installed now. **Phase 3 owns installing the heavy runtime stack** from `requirements.txt` before its adapter tasks (3.1+) begin.
 - [x] 0.4 Create `.github/workflows/ci.yml`: `lint` (ruff), `typecheck` (mypy), `test` (pytest) jobs, each installing only `requirements-dev.txt` — not the heavy stack (Success Criteria)
 - [x] 0.5 Write `tests/architecture/test_monolith_frozen.py` asserting `sha256(app.py)` equals the baseline digest `8f47847d27acb716451f6eef13ce4858941c4c713798886cd008dea8fbb3e7fe` (computed from `193c577:app.py`; the working tree matches — verified via `sha256sum app.py` vs `git show 193c577:app.py | sha256sum`). Literal is hardcoded, not recomputed at test time (app.py Decomposition table, Phase 0 row)
-- [x] 0.6 Add CI job (`flet-capability`) + reusable `scripts/check_flet_capability.py` asserting `hasattr(ft.Image, "src_bytes")` on the resolved Flet install, failing the build if absent (D-G, FIX 10, Open Question 2). **Result: FAILS as designed** — see Risks/Findings below. Resolved version reported at runtime rather than assumed.
+- [x] 0.6 Add CI job (`flet-capability`) + reusable `scripts/check_flet_capability.py` asserting that `Image.src` accepts `bytes` directly — a positive functional check (construct `ft.Image(src=b"...")`, assert the value survives as `bytes`), failing the build if it does not, and reporting the resolved Flet version (D-G, corrected). **Original assertion (`hasattr(ft.Image, "src_bytes")`) was based on a false premise — see `explore.md` section 1 — and failed unconditionally on every version in the pinned range; corrected to a functional check on `Image.src` itself, which now passes.**
 - [x] 0.7 Verify: clean state → `.venv-linux/` → `pytest` runs green, `ruff` runs clean, `mypy` runs clean (Success Criteria). See verbatim command output in apply-progress / PR 0 description.
 
-### Phase 0 Finding — D-G / Open Question 2 is falsified, not just unconfirmed (needs a decision before Phase 5)
+### Phase 0 Finding — D-G / Open Question 2, now resolved (was: falsified premise)
 
-`scripts/check_flet_capability.py` and the `flet-capability` CI job both **fail** against every Flet version actually resolvable in the pinned range:
+`scripts/check_flet_capability.py`'s original assertion (`hasattr(ft.Image, "src_bytes")`) failed against every Flet version actually resolvable in the pinned range, because the premise itself was false, not because of a real capability gap:
 
 - Resolved version in `.venv-linux/`: **flet 0.85.3** (within the `>=0.84.0,<0.86.0` pin).
-- `hasattr(ft.Image, "src_bytes")` → **`False`**.
-- Root cause (verified against installed package source, not inferred): in this Flet generation, `Image.__init__` takes `src: Union[str, bytes]` directly — raw bytes are assigned straight to `src`, there is no separate `src_bytes` attribute at all. This was also checked against `flet==0.84.0` (the pin floor) via a throwaway venv: same signature, same absence.
-- `app.py`'s own current code does not use `src_bytes` either — it assigns base64 data-URI strings to `img_ctrl.src` (see `app.py:164,244`), consistent with the pre-rewrite Flet API the 0.85.1 docstring claims, not with the 0.84–0.86 API actually installable today.
-- **This is not "ceiling needs widening" (Open Question 2's framing) — no version in the realistic pin range has `Image.src_bytes` as a separate attribute.** Phase 5 (FIX 1, FIX 10, task 5.1) must decide between: (a) design against `Image.src = <bytes>` directly instead of a `src_bytes` attribute, since the port already returns `EncodedImage(data, media_type)` and only `event_renderer.py` would need to change: or (b) pin an older Flet series if `src_bytes` genuinely existed pre-rewrite and zero-copy semantics differ meaningfully between `src=bytes` and a dedicated `src_bytes` field. This needs an explicit decision before Phase 5a/5b tasks (5.1, 5.2, 5.9) are written against a `src_bytes` API that does not exist on the pinned Flet.
+- `hasattr(ft.Image, "src_bytes")` → **`False`**. Also checked against `flet==0.84.0` (the pin floor) via a throwaway venv: same absence.
+- Verified against the installed package source (not inferred, not from documentation): `Image.__init__` takes `src: Union[str, bytes]` directly — raw bytes are assigned straight to `src`. There is no separate `src_bytes` attribute in this Flet generation at all — it is not merely missing on this range, it never existed as a distinct field.
+- `app.py:164`'s existing `img_ctrl.src = fb` (raw JPEG bytes) is therefore **already correct**, supported usage — not a defect. **FIX 1 is withdrawn.**
+- **Resolution (supersedes the (a)/(b) decision this section originally deferred to Phase 5)**: option (a) — design against `Image.src = <bytes>` directly — is confirmed correct. The port already returns `EncodedImage(data, media_type)`, so only `presentation/event_renderer.py` is affected, and it needs no behavior change from what `app.py:164` already does. `gapless_playback=True` survives independently as **ENH-1** (see `explore.md` section 1, `proposal.md` D3).
+- `scripts/check_flet_capability.py` is corrected to the positive functional check described in task 0.6 above and now **passes**.
+- This resolves design Open Question 2; it is no longer open (see `design.md` D-G and Open Questions).
 
 ## Phase 1a: Domain core — counting, detections, errors
 
@@ -158,7 +160,7 @@ This repository was `git init`-ed locally this session and **has no remote confi
 
 ## Phase 5a: Presentation — event rendering, theme, DEGRADED indicator
 
-- [ ] 5.1 RED `tests/presentation/test_event_renderer.py`: `FrameRendered` → bytes assigned to `Image.src_bytes` (not `src`), `gapless_playback=True` (live-video-presentation "Frame Rendering via src_bytes"; FIX 1)
+- [ ] 5.1 RED `tests/presentation/test_event_renderer.py`: `FrameRendered` → bytes assigned to `Image.src` (this is the existing `app.py:164` behavior, now confirmed correct on the pinned Flet — FIX 1 withdrawn, no separate `src_bytes` property exists), `gapless_playback=True` (live-video-presentation "Frame Rendering via Image.src (bytes)"; ENH-1)
 - [ ] 5.2 GREEN: `presentation/event_renderer.py` (event → control mapping) + `presentation/theme.py`
 - [ ] 5.3 RED `tests/presentation/test_event_renderer.py`: `SessionStateChanged(DEGRADED)` → distinct indicator visible; back to `RUNNING` → indicator cleared (live-video-presentation "DEGRADED Indicator Visibility"; D1)
 - [ ] 5.4 GREEN: implement DEGRADED indicator in `event_renderer.py`
@@ -179,7 +181,7 @@ This repository was `git init`-ed locally this session and **has no remote confi
 
 ## Human Validation Gate (blocking — between Phase 5 and Phase 6)
 
-- [ ] G.1 **[Human-performed, not automatable]** User runs the app on the target machine with a real camera; confirms the live feed renders correctly via `src_bytes` before Phase 6 proceeds (D3; live-video-presentation "Mandatory user validation gate before Phase 6"). Phase 6 tasks MUST NOT start until this is explicitly confirmed.
+- [ ] G.1 **[Human-performed, not automatable]** User runs the app on the target machine with a real camera; confirms the live feed and the rewired session controls (event bus, drain loop, `DEGRADED` indicator, `SessionController` wiring) behave correctly before Phase 6 proceeds (D3, rewritten rationale — the gate covers the Phase 5 presentation-layer rewiring, not an image-API behavior change, since FIX 1 is withdrawn; live-video-presentation "Mandatory user validation gate before Phase 6"). Phase 6 tasks MUST NOT start until this is explicitly confirmed.
 
 ## Phase 6: Strangler cleanup
 

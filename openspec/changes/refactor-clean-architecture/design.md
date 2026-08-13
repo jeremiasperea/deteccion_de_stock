@@ -173,7 +173,13 @@ Two threads only.
 
 ### D-G: Flet pin — `flet>=0.84.0,<0.86.0`
 
-The exploration verified `Image.src_bytes` against the 0.84.0 documentation; the module docstring claims 0.85.1 on the target machine. Pre-1.0 Flet minors are breaking, so the ceiling is the next minor after the claimed runtime. Phase 0 adds a CI capability assertion (`hasattr(ft.Image, "src_bytes")`) that fails the build rather than a runtime fallback. The `FrameEncoder` port returns `EncodedImage(data, media_type)`, so if a future Flet requires base64 only `presentation/event_renderer.py` changes — the pin stays cheap.
+**Original rationale (corrected)**: the exploration originally claimed `Image.src_bytes` was verified against the 0.84.0 documentation, and the pin ceiling followed from that claimed capability. That claim is false: re-verified directly against the installed package (`flet==0.85.3` resolved in `.venv-linux/`, and independently `flet==0.84.0`, the pin floor), there is no `src_bytes` attribute anywhere in this Flet generation — `Image.src` has always accepted `bytes` directly (see `explore.md` section 1). FIX 1 is withdrawn on this basis.
+
+The pin's practical purpose is unchanged by this correction: pre-1.0 Flet minors are breaking, so the ceiling stays the next minor after the claimed runtime (0.85.1 per the module docstring). It no longer rests on a `src_bytes` capability claim, though — it rests on `Image.src` continuing to accept `bytes` directly, which is the actual capability the presentation layer depends on.
+
+Phase 0's CI capability assertion is corrected accordingly: `scripts/check_flet_capability.py` no longer sniffs `hasattr(ft.Image, "src_bytes")` — that check was always `False` on the pinned range and failed the build unconditionally, independent of any real regression. It instead runs a positive functional check: construct `ft.Image(src=b"...")` and assert the value survives as `bytes`. It still reports the resolved Flet version.
+
+The `FrameEncoder` port still returns `EncodedImage(data, media_type)`, so if a future Flet ever drops direct `bytes` support from `Image.src`, only `presentation/event_renderer.py` changes — the pin stays cheap.
 
 ## Data Flow
 
@@ -305,7 +311,7 @@ Phases 0–4 leave `app.py` **byte-identical**, enforced mechanically: `tests/ar
 | 2 | frozen | — (contracts only) | Protocol conformance via in-memory fakes; layered config precedence (CLI > env > INI > default) with an injected mapping |
 | 3 | frozen | 92–121, 88/123, 132–151, 220–222, 384–394 | Adapter tests on recorded fixtures: encode/annotate golden bytes, atomic export (temp + `os.replace`, interrupted-write case), repository single-writer + snapshot copy, `FakeClock`-driven backoff |
 | 4 | frozen | 44–56, 345–382 (state machine, lifecycle) | Controller tests with fake ports: full transition matrix, DEGRADED entry/exit, ordered shutdown, join-timeout branch, queue lanes (coalesce vs never-drop vs saturation vs hard ceiling) |
-| 5 | **modified** | 64–249 rewired, 275–343 replaced | `main()` splits into `presentation/view.py` (controls), `event_renderer.py` (event → control), `theme.py`; `src_bytes` + `gapless_playback=True`; one drain loop; renderer tests over synthetic event streams. **Mandatory D3 user validation gate on the target machine before Phase 6.** |
+| 5 | **modified** | 64–249 rewired, 275–343 replaced | `main()` splits into `presentation/view.py` (controls), `event_renderer.py` (event → control), `theme.py`; `Image.src = bytes` (unchanged behavior, FIX 1 withdrawn) + `gapless_playback=True` (ENH-1); one drain loop; renderer tests over synthetic event streams. **Mandatory D3 user validation gate on the target machine before Phase 6, on presentation-rewiring grounds.** |
 | 6 | **modified** | delete `detection_worker`, `AppState`, module globals | `app.py` = `from depot_vision.presentation.flet_app import run; run()`; smoke test that the entrypoint imports and builds the page with fake ports |
 
 ## Testing Strategy
@@ -316,7 +322,7 @@ Phases 0–4 leave `app.py` **byte-identical**, enforced mechanically: `tests/ar
 | Unit (application) | Controller states, shutdown ordering, join timeout, queue lanes | In-memory fake ports + `FakeClock`; `threading.Event` handshakes, no `sleep`-based timing |
 | Integration (adapters) | Encoder, annotator, exporter, repository, config provider | Recorded JPEG/detection fixtures; `tmp_path` for filesystem; **no camera, no GPU, no weights** |
 | Architecture | Dependency rule; `app.py` freeze | `ast` import walk; SHA-256 digest assertion |
-| Manual (E2E) | Live feed, model load, `src_bytes` rendering | User-run on the target machine — the D3 gate at Phase 5 |
+| Manual (E2E) | Live feed, model load, `Image.src` (bytes) rendering, presentation-layer rewiring | User-run on the target machine — the D3 gate at Phase 5 |
 
 Strict TDD: every FIX and FT item lands as RED → GREEN, one test that fails against the current behavior first.
 
@@ -341,4 +347,5 @@ No data migration. Rollout is the seven-phase strangler chain from the proposal;
 ## Open Questions
 
 - [ ] If the orphaned worker blocks forever inside `cv2.VideoCapture.read()`, the reap path never completes and the device stays held until process exit. Mitigation where the backend supports it: `CAP_PROP_OPEN_TIMEOUT_MSEC` / `CAP_PROP_READ_TIMEOUT_MSEC` (V4L2 support varies). Residual risk accepted; `daemon=True` guarantees the process can still exit.
-- [ ] `flet` `<0.86.0` ceiling is inferred from the docstring's claimed 0.85.1, not from an installed runtime. Phase 0 CI must report the resolved version so the ceiling can be confirmed or widened.
+
+**Resolved**: the `flet` `<0.86.0` ceiling / `Image.src_bytes` capability question (formerly open here) is answered, not open. Verified against the installed package (`flet==0.85.3` and `flet==0.84.0`): there is no `src_bytes` attribute anywhere in the pinned range; `Image.src` accepts `bytes` directly, which is the actual capability the presentation layer needs. See D-G and `explore.md` section 1. `scripts/check_flet_capability.py` now asserts that functional capability directly and reports the resolved version; it no longer depends on confirming or widening a ceiling inferred from documentation.

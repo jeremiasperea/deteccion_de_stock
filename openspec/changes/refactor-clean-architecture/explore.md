@@ -6,9 +6,9 @@
 - **Baseline**: `193c577` (monolith), `42432bf` (SDD scaffold)
 - **Subject**: `app.py`, 438 lines, single-file monolith
 
-## 1. Flet API verification — confirmed defect
+## 1. Flet API verification — claim retracted (verified against the installed package)
 
-`app.py:164` assigns raw JPEG bytes to `Image.src`:
+**Original claim (retracted)**: `app.py:164` assigns raw JPEG bytes to `Image.src`:
 
 ```python
 _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
@@ -17,34 +17,51 @@ frame_bytes = bytes(buf)
 img_ctrl.src = fb          # fb is `bytes`
 ```
 
-Verified against the official Flet documentation for v0.84.0 (`website/docs/controls/image.md`):
+This was flagged as a defect on the claim that Flet types `Image.src` as a URL/asset
+path `str` and that in-memory bytes belong in a separate `Image.src_bytes` property,
+based on the Flet 0.84.0 website documentation (`website/docs/controls/image.md`),
+which does list `src_bytes` as a distinct `bytes`-typed property alongside `src`
+(`str`) and `src_base64` (`str`).
 
-| Property | Accepted type | Purpose |
-| --- | --- | --- |
-| `src` | `str` | URL or asset path |
-| `src_bytes` | `bytes` | in-memory image data |
-| `src_base64` | `str` | base64-encoded image data |
+**Verified ground truth (installed package, not documentation)**: that claim is false
+for the pinned range. Checked directly against `flet==0.85.3` (resolved in
+`.venv-linux/`) and independently against `flet==0.84.0` (the pin floor) in a
+throwaway venv:
 
-`src` is typed as a URL/asset path string. Passing `bytes` to it is not a supported
-contract in any documented Flet version. The initial value set at `app.py:276` is a
-`https://placehold.co/...` URL, which confirms `src` is being used as a URL field —
-and then reassigned with binary data every frame.
+- `flet/controls/core/image.py:36` declares `src: Union[str, bytes]` directly — not
+  `str` only.
+- `dataclasses.fields(ft.Image)` contains `src` and `placeholder_src` (also
+  `Union[str, bytes]`-typed, line 106). There is **no** `src_bytes` field anywhere in
+  the dataclass.
+- `hasattr(ft.Image, "src_bytes")` is `False`.
+- `ft.Image(src=b"...")` constructs without error, and `img.src = b"..."` reassigns
+  without error; both preserve the value as `bytes`.
+- `gapless_playback` does exist as a field, typed `bool`, defaulting to `False`.
 
-**Conclusion**: the live video feed is driven through an unsupported property
-assignment. The presentation refactor therefore **fixes** behavior rather than
-preserving it. This must be captured as an explicit spec requirement, not applied as
-a silent cleanup.
+**Conclusion**: `img_ctrl.src = fb` at `app.py:164` is correct, supported usage for
+this Flet generation — not a defect. There is no `src_bytes` API to migrate to;
+assigning `bytes` directly to `src` *is* the zero-copy API. **This finding is
+withdrawn** (see FIX list, item 1, marked withdrawn below).
 
-**Correct target**: `src_bytes` for the encoded frame. Additionally,
-`gapless_playback=True` is documented as the way to prevent flickering when the image
-source changes repeatedly — directly applicable to a live camera feed and currently
-unset.
+**What survives**: `gapless_playback=True` is real and still applicable. It is
+documented to prevent flicker when `Image.src` is reassigned repeatedly, which is
+exactly what a live camera feed does, and the default is `False`. It is retained as
+**ENH-1**, an explicit enhancement — not part of a withdrawn defect fix.
 
-**Secondary finding**: `requirements.txt` pins `flet>=0.21.0` while the module
-docstring claims Flet 0.85.1. `src_bytes` is documented for the 0.84+ line; older
-releases exposed `src_base64` only. An unpinned lower bound means the same source can
-bind to two incompatible image APIs. The dependency floor must be pinned to a version
-whose image API the code actually targets.
+**Method lesson**: verify a library-behavior claim against the *installed* package
+(source, `dataclasses.fields`, `hasattr`, and a constructed instance), not against a
+vendored or fetched copy of its documentation. The Context7 copy of the Flet 0.84.0
+docs shows `ft.Image(src_bytes=...)`; the code that version actually ships does not
+match its own docs. Documentation can drift from a pre-1.0 package's shipped API — the
+installed package is the only source of truth for a capability claim.
+
+**Correction to the secondary finding**: the original secondary finding argued the
+`requirements.txt` floor (`flet>=0.21.0`) risked binding to two incompatible image
+APIs (`src_base64` pre-0.84 vs. `src_bytes` at 0.84+). Since `src_bytes` never existed
+as a distinct attribute in the 0.84–0.86 range, that specific mechanism is also
+incorrect. The underlying pinning concern — an unpinned floor can resolve to an
+incompatible Flet across pre-1.0 minors — is independently reasonable and is addressed
+by design decision D-G, but not on a `src_bytes` basis.
 
 ## 2. Testable seams
 
@@ -129,7 +146,11 @@ requires its own failing test first.
 
 ### FIX — current defects; each becomes a spec requirement with a RED test
 
-1. `Image.src = bytes` → `src_bytes`, plus `gapless_playback=True` (section 1).
+1. ~~`Image.src = bytes` → `src_bytes`, plus `gapless_playback=True`~~ — **WITHDRAWN**.
+   `Image.src` accepting `bytes` is correct, supported behavior on the pinned Flet
+   range; there is no `src_bytes` property to migrate to (section 1, verified against
+   the installed package). No fix needed here. `gapless_playback=True` survives
+   independently as **ENH-1** (enhancement, not a defect fix).
 2. `app.py:372` — `page.run_task(ui_loop)` is re-invoked on every Start while `ui_loop`
    is an unterminated `while True`. Repeated Start/Stop cycles accumulate concurrent UI
    drain loops that never exit.
@@ -153,6 +174,9 @@ requires its own failing test first.
     (section 1).
 11. `app.py:340-342` — `page.update()` wrapped in `except Exception: pass`, silently
     discarding UI failures.
+
+**FIX count: 10** (item 1 withdrawn per section 1; items 2–11 keep their original
+numbers so every existing cross-reference elsewhere stays valid).
 
 ## 5. Correction to a prior assumption
 

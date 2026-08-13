@@ -18,7 +18,7 @@
 
 A fourth driver is reliability: a single broad `except Exception` ends detection permanently on any failure, and Stop never joins the worker thread. The app can die silently and cannot report that it is degraded.
 
-This refactor makes the domain testable, the infrastructure replaceable, and the runtime fault-tolerant — while fixing 11 confirmed defects that the exploration verified against the Flet 0.84 documentation and the source.
+This refactor makes the domain testable, the infrastructure replaceable, and the runtime fault-tolerant — while fixing 10 confirmed defects that the exploration verified against the source, and adding one enhancement (ENH-1). A further finding — originally flagged as an 11th defect on the basis of the Flet documentation — was re-verified against the *installed* package, found false, and withdrawn (FIX 1; see `explore.md` section 1).
 
 ## Scope
 
@@ -30,8 +30,8 @@ This refactor makes the domain testable, the infrastructure replaceable, and the
 4. **Ports and adapters** for every seam in the exploration's seam table.
 5. **Application layer**: `SessionController` with an explicit state machine.
 6. **Fault-tolerance requirements** (first-class, not cleanup) — see below.
-7. **Presentation fix**: `src_bytes` + `gapless_playback=True`, one terminating UI drain loop, no silently swallowed `page.update()`.
-8. **All 11 FIX items** from the exploration, each with a preceding RED test.
+7. **Presentation**: `gapless_playback=True` (ENH-1), one terminating UI drain loop, no silently swallowed `page.update()`. (FIX 1 — the `src`→`src_bytes` claim — is withdrawn; `Image.src` already accepts `bytes` correctly.)
+8. **All 10 remaining FIX items** from the exploration, each with a preceding RED test (FIX 1 withdrawn).
 9. **`app.py` reduced to a thin entrypoint** delegating to the package.
 
 ### Out of Scope (explicit non-goals)
@@ -113,16 +113,30 @@ Affects: `live-video-presentation`, `capture-session`. The queue contract belong
 `sdd-design`; the non-droppable guarantee belongs in the spec as a testable
 requirement.
 
-### D3 — `src_bytes` accepted as a behavior fix, with a user validation gate
+### D3 — Phase 5 user validation gate (rewritten rationale — `src_bytes` premise retracted)
 
-The `src` → `src_bytes` correction is accepted as an explicit fix, not a preservation.
-A visual difference in the live feed is acceptable. Phase 5 carries a **mandatory
-validation gate**: the user runs the app on the target machine with a real camera and
-confirms the feed renders correctly before Phase 6 proceeds.
+**Original framing (retracted)**: this decision accepted a `src` → `src_bytes`
+correction as an explicit behavior fix, with a visual difference in the live feed
+considered acceptable, gated by mandatory Phase 5 user validation. That premise is
+false: re-verified against the installed Flet package, `Image.src` already accepts
+`bytes` correctly, there is no `src_bytes` property to migrate to, and FIX 1 is
+withdrawn (see `explore.md` section 1). There is **no rendering behavior change** from
+this corrected finding, so "the user may see a different-looking feed" no longer
+applies.
+
+**The gate survives, on new grounds**: Phase 5 rewires the entire presentation layer
+— image rendering, the bounded event bus and its drain loop, the `DEGRADED` indicator,
+and session-control wiring — onto `SessionController` for the first time. That is a
+first live-hardware exercise of the new application/adapter stack regardless of the
+image API being unchanged, and it warrants confirmation on real hardware. The
+**mandatory validation gate** remains: the user runs the app on the target machine
+with a real camera and confirms the feed and controls behave correctly before Phase 6
+proceeds.
 
 Rationale: camera and model behavior cannot be verified in the development
 environment. Deferring confirmation to the end would make it impossible to attribute a
-regression to the phase that caused it.
+regression to the phase that caused it. This holds independently of the withdrawn
+`src_bytes` claim.
 
 Affects: `live-video-presentation`, Phase 5 exit criteria.
 
@@ -132,7 +146,7 @@ Affects: `live-video-presentation`, Phase 5 exit criteria.
 
 - `detection-counting`: target classes, confidence threshold, count snapshot production (PRESERVE 1–2).
 - `capture-session`: session lifecycle state machine, start/pause/stop semantics, retry/backoff, degraded operation, ordered shutdown (PRESERVE 6; FT1, FT2, FT4).
-- `live-video-presentation`: frame annotation, encoding, `src_bytes` rendering, FPS/frame overlay, bounded UI event delivery, detection log cadence (PRESERVE 3, 7, 8; FIX 1, 2, 11; FT3).
+- `live-video-presentation`: frame annotation, encoding, `Image.src` (bytes) rendering, FPS/frame overlay, bounded UI event delivery, detection log cadence (PRESERVE 3, 7, 8; FIX 2, 11; ENH-1; FT3).
 - `count-history-export`: history accumulation, CSV schema and filename, atomic write, configurable destination (PRESERVE 4–5; FT5, FT7, FT8).
 - `runtime-configuration`: resolution of confidence threshold, model weights path, export directory, queue bounds (FIX 5, 9; mechanism chosen in `sdd-design`).
 
@@ -177,8 +191,8 @@ Phase 0 is a hard prerequisite: no RED test can execute until it lands.
 | --- | --- | --- |
 | Camera and model behavior cannot be verified in this environment | **High (certain)** | Adapter tests run against recorded fixtures; end-to-end verification requires the user to run the app on the target machine and confirm |
 | `app.py` changes regress behavior undetected (zero coverage) | Medium | Phases 5–6 land last, after the PRESERVE list is covered by tests at lower layers; each is a separate revertible slice |
-| Flet version pin mismatches the installed runtime | Medium | Phase 0 pins the floor and CI asserts the resolved version before Phase 5 uses `src_bytes` |
-| `src_bytes` fix behaves differently on the user's machine than the current (unsupported) `src` assignment | Medium | Explicit spec requirement, not a silent cleanup; user confirmation required at Phase 5 |
+| Flet version pin mismatches the installed runtime | Medium | Phase 0 pins the floor and CI asserts, via a functional check, that the resolved version accepts `bytes` on `Image.src` before Phase 5 relies on it |
+| Phase 5 rewires the entire presentation layer onto the controller; the image API itself is unchanged (FIX 1 withdrawn), but wiring regressions in the new event bus/drain-loop/controller path are still possible | Medium | D3 user validation gate at Phase 5, rewritten to cover the wiring rewrite rather than an image-API behavior change |
 | Strangler transitional shims linger as dead code | Low | Phase 6 explicitly deletes them; archive gate warns on destructive deltas |
 | Toolchain rebuild blocked by network/dependency availability | Low | Phase 0 is standalone; failure blocks the change before any source is touched |
 
