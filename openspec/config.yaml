@@ -1,0 +1,61 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Python (desktop app), Flet UI, Ultralytics YOLOv8, OpenCV, pandas, numpy.
+  Architecture: single-file monolith (app.py, 438 lines). No package layout yet.
+  Testing: no test runner configured (pytest proposed, not yet installed).
+  Style: no linter/type checker/formatter configured yet.
+  Persistence: hybrid (this file + Engram observations under project "deteccion_de_stock").
+
+strict_tdd: true
+
+testing:
+  runner: none
+  proposed_runner: pytest
+  layers:
+    unit: false
+    integration: false
+    e2e: false
+  coverage:
+    available: false
+    proposed: pytest-cov
+  quality_tools:
+    linter: none
+    type_checker: none
+    formatter: none
+  notes: |
+    .venv/ at repo root has a Windows-layout venv (Scripts/, Lib/) with a
+    Windows PE32+ python.exe — not runnable from WSL2 Linux directly.
+    Its site-packages does not contain flet, ultralytics, opencv-python,
+    pandas, or pytest, so it cannot run this project's app or tests as-is.
+    System python3 (3.10.12) is available on the Linux side but has no
+    project dependencies installed either. Toolchain setup is a prerequisite
+    before Strict TDD can be enforced in practice.
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Flag any change touching app.py as high-risk given the monolith has zero test coverage today
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+    - Document how app.py will be decomposed/tested incrementally (module boundaries: detection, camera capture, UI, CSV export)
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Every implementation task pairs with a RED (failing test) task before the GREEN (implementation) task
+  apply:
+    guidelines:
+      - Follow existing code patterns
+      - Do not implement production code without a preceding failing test (Strict TDD)
+    tdd: true            # Strict TDD enabled per explicit user request
+    test_command: "pytest"   # proposed — not yet available, must be bootstrapped first
+  verify:
+    test_command: "pytest"   # proposed — not yet available
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
