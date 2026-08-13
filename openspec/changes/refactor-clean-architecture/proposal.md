@@ -67,12 +67,64 @@ Session states: `IDLE`, `STARTING`, `RUNNING`, `PAUSED`, `DEGRADED`, `STOPPING`,
 | --- | --- | --- |
 | FT1 | Retry with bounded backoff on camera open and frame read | FIX 7 — broad `except Exception` kills the worker |
 | FT2 | Explicit session state machine including `DEGRADED` | two ad-hoc booleans |
-| FT3 | Bounded UI event queue with a documented drop policy (newest-wins on overflow) | FIX 8 — unbounded `list` |
+| FT3 | Bounded UI event queue with a **type-differentiated** overflow policy (see Resolved Decisions D2) | FIX 8 — unbounded `list` |
 | FT4 | Ordered shutdown: signal → drain → `thread.join(timeout)` → release camera | FIX 3 — Stop returns without joining |
 | FT5 | Atomic CSV write (temp file + `os.replace`) | FIX 6 — truncated file on interruption |
 | FT6 | Typed domain exceptions (`CameraUnavailable`, `InferenceFailed`, `ExportFailed`) with layer-appropriate handling | FIX 7, FIX 11 — catch-all and silent `pass` |
 | FT7 | Guarded history access (single owner + snapshot reads) | FIX 4 — composite clear/append/read interleaving |
 | FT8 | Package-relative model weights resolution and configurable export directory | FIX 9, FIX 5 — cwd and `~/Desktop` |
+
+## Resolved Decisions
+
+The proposal phase raised three product questions. The user answered them explicitly.
+These are binding inputs for `sdd-spec` and `sdd-design` and override any earlier
+wording in this document.
+
+### D1 — `DEGRADED` is user-visible
+
+The UI MUST surface a distinct indicator when the session is `DEGRADED` (camera or
+inference failing while the app stays alive and retrying). Rationale: today the app
+dies silently and the last successful frame stays frozen on screen, so an operator
+cannot distinguish "no objects present" from "capture is dead". A fault-tolerance
+requirement that is invisible to the operator does not protect the operator.
+
+Affects: `capture-session`, `live-video-presentation`. Requires a spec requirement and
+a test asserting the indicator appears on transition into `DEGRADED` and clears on
+recovery.
+
+### D2 — Type-differentiated queue overflow policy (supersedes "newest-wins")
+
+FT3's overflow policy is differentiated by event type, not uniform:
+
+| Event type | Overflow behavior |
+| --- | --- |
+| Frame events | **Coalesce** — only the most recent frame is retained; superseded frames are dropped |
+| Session state events | **Never dropped** — the queue MUST NOT discard a state transition |
+| Log / detection events | **Never dropped** — bounded by retention, not by overflow |
+
+Rationale: a stale frame has no value on a live feed, but a discarded error log or a
+lost state transition destroys the diagnostic trail that the whole fault-tolerance
+effort exists to produce. If the queue must lose something, it loses pixels, never
+evidence.
+
+This supersedes the uniform newest-wins policy stated earlier in this proposal.
+
+Affects: `live-video-presentation`, `capture-session`. The queue contract belongs in
+`sdd-design`; the non-droppable guarantee belongs in the spec as a testable
+requirement.
+
+### D3 — `src_bytes` accepted as a behavior fix, with a user validation gate
+
+The `src` → `src_bytes` correction is accepted as an explicit fix, not a preservation.
+A visual difference in the live feed is acceptable. Phase 5 carries a **mandatory
+validation gate**: the user runs the app on the target machine with a real camera and
+confirms the feed renders correctly before Phase 6 proceeds.
+
+Rationale: camera and model behavior cannot be verified in the development
+environment. Deferring confirmation to the end would make it impossible to attribute a
+regression to the phase that caused it.
+
+Affects: `live-video-presentation`, Phase 5 exit criteria.
 
 ## Capabilities
 
