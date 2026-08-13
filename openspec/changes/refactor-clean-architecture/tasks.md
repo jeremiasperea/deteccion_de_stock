@@ -55,13 +55,23 @@ This repository was `git init`-ed locally this session and **has no remote confi
 
 ## Phase 0: Toolchain (blocking — no RED test can execute until this lands)
 
-- [ ] 0.1 Create Linux-native venv (`python3.10 -m venv .venv`); do NOT reuse the existing Windows-layout `.venv/` (Proposal Phase 0)
-- [ ] 0.2 Create `pyproject.toml`: `pytest`, `ruff`, `mypy`, `coverage` config sections (Success Criteria)
-- [ ] 0.3 Create pinned `requirements.txt` incl. `flet>=0.84.0,<0.86.0` + pinned floors for opencv-python, ultralytics, pandas, numpy (D-G)
-- [ ] 0.4 Create `.github/workflows/ci.yml`: ruff + mypy + pytest jobs (Success Criteria)
-- [ ] 0.5 Write `tests/architecture/test_monolith_frozen.py` asserting `sha256(app.py)` equals the baseline digest `8f47847d27acb716451f6eef13ce4858941c4c713798886cd008dea8fbb3e7fe` (computed from `193c577:app.py`; the working tree matches). Use this literal — do not recompute at test time, which would make the assertion vacuous (app.py Decomposition table, Phase 0 row)
-- [ ] 0.6 Add CI job asserting `hasattr(ft.Image, "src_bytes")` on the resolved Flet install, failing the build if absent (D-G, FIX 10, Open Question 2)
-- [ ] 0.7 Verify: clean checkout → venv → `pytest` runs green (0 tests) and `ruff`/`mypy` run clean (Success Criteria)
+- [x] 0.1 **ORCHESTRATOR OVERRIDE — venv location changed.** Original text: "Create Linux-native venv (`python3.10 -m venv .venv`)". Do NOT do that: the existing `.venv/` is a Windows-layout virtualenv (`Scripts/`, `Lib/`, a PE32+ `python.exe`) and may be the user's real Windows runtime for the camera-dependent D3 gate; overwriting it is destructive and not recoverable from this repo. Instead created the Linux venv at **`.venv-linux/`**, left `.venv/` completely untouched, and added `.venv-linux/` to `.gitignore` (`.venv/` was already ignored).
+- [x] 0.2 Create `pyproject.toml`: `pytest`, `ruff`, `mypy`, `coverage` config sections (Success Criteria). `mypy.files` intentionally omits `src` until Phase 1 creates `src/depot_vision/` (mypy hard-errors on a configured path that does not exist yet — Phase 1 must add `"src"` back to `tool.mypy.files`). `ruff.extend-exclude` excludes `app.py` — it is the frozen monolith (see 0.5), not in-scope for lint/format until Phase 5b lifts the freeze.
+- [x] 0.3 **ORCHESTRATOR OVERRIDE — split install.** `requirements.txt` still pins everything per D-G (`flet>=0.84.0,<0.86.0` + floors for opencv-python/ultralytics/pandas/numpy), but only `flet` was installed into `.venv-linux/` in Phase 0 — `opencv-python`, `ultralytics`, `pandas`, `numpy` are multi-GB and not needed until Phase 3's adapters. Added **`requirements-dev.txt`** (`pytest`, `pytest-cov`, `ruff`, `mypy`) for the tooling actually installed now. **Phase 3 owns installing the heavy runtime stack** from `requirements.txt` before its adapter tasks (3.1+) begin.
+- [x] 0.4 Create `.github/workflows/ci.yml`: `lint` (ruff), `typecheck` (mypy), `test` (pytest) jobs, each installing only `requirements-dev.txt` — not the heavy stack (Success Criteria)
+- [x] 0.5 Write `tests/architecture/test_monolith_frozen.py` asserting `sha256(app.py)` equals the baseline digest `8f47847d27acb716451f6eef13ce4858941c4c713798886cd008dea8fbb3e7fe` (computed from `193c577:app.py`; the working tree matches — verified via `sha256sum app.py` vs `git show 193c577:app.py | sha256sum`). Literal is hardcoded, not recomputed at test time (app.py Decomposition table, Phase 0 row)
+- [x] 0.6 Add CI job (`flet-capability`) + reusable `scripts/check_flet_capability.py` asserting `hasattr(ft.Image, "src_bytes")` on the resolved Flet install, failing the build if absent (D-G, FIX 10, Open Question 2). **Result: FAILS as designed** — see Risks/Findings below. Resolved version reported at runtime rather than assumed.
+- [x] 0.7 Verify: clean state → `.venv-linux/` → `pytest` runs green, `ruff` runs clean, `mypy` runs clean (Success Criteria). See verbatim command output in apply-progress / PR 0 description.
+
+### Phase 0 Finding — D-G / Open Question 2 is falsified, not just unconfirmed (needs a decision before Phase 5)
+
+`scripts/check_flet_capability.py` and the `flet-capability` CI job both **fail** against every Flet version actually resolvable in the pinned range:
+
+- Resolved version in `.venv-linux/`: **flet 0.85.3** (within the `>=0.84.0,<0.86.0` pin).
+- `hasattr(ft.Image, "src_bytes")` → **`False`**.
+- Root cause (verified against installed package source, not inferred): in this Flet generation, `Image.__init__` takes `src: Union[str, bytes]` directly — raw bytes are assigned straight to `src`, there is no separate `src_bytes` attribute at all. This was also checked against `flet==0.84.0` (the pin floor) via a throwaway venv: same signature, same absence.
+- `app.py`'s own current code does not use `src_bytes` either — it assigns base64 data-URI strings to `img_ctrl.src` (see `app.py:164,244`), consistent with the pre-rewrite Flet API the 0.85.1 docstring claims, not with the 0.84–0.86 API actually installable today.
+- **This is not "ceiling needs widening" (Open Question 2's framing) — no version in the realistic pin range has `Image.src_bytes` as a separate attribute.** Phase 5 (FIX 1, FIX 10, task 5.1) must decide between: (a) design against `Image.src = <bytes>` directly instead of a `src_bytes` attribute, since the port already returns `EncodedImage(data, media_type)` and only `event_renderer.py` would need to change: or (b) pin an older Flet series if `src_bytes` genuinely existed pre-rewrite and zero-copy semantics differ meaningfully between `src=bytes` and a dedicated `src_bytes` field. This needs an explicit decision before Phase 5a/5b tasks (5.1, 5.2, 5.9) are written against a `src_bytes` API that does not exist on the pinned Flet.
 
 ## Phase 1a: Domain core — counting, detections, errors
 
