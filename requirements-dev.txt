@@ -1,0 +1,8 @@
+# Toolchain-only dependencies (Phase 0). Installed into .venv-linux/.
+# The heavy runtime stack (opencv-python, ultralytics, pandas, numpy) stays
+# in requirements.txt, pinned but NOT installed here — Phase 3 owns that
+# install once the adapters that need it exist.
+pytest>=7.4
+pytest-cov>=4.1
+ruff>=0.4
+mypy>=1.8

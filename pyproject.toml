@@ -1,0 +1,47 @@
+[project]
+name = "depot-vision"
+version = "0.1.0"
+description = "Real-time stock counting and classification (Flet + YOLOv8 + OpenCV)"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+minversion = "7.4"
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests", "scripts"]
+# app.py is the frozen pre-refactor monolith (tests/architecture/test_monolith_frozen.py
+# pins its sha256). It must stay byte-identical until Phase 5b, so it is out of lint
+# scope entirely rather than "clean" by accident.
+extend-exclude = ["app.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# "src" is intentionally omitted until Phase 1 creates src/depot_vision/ — mypy
+# errors on a `files` entry that does not exist yet. Phase 1 task must add "src"
+# back to this list once the package exists.
+files = ["tests", "scripts"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 0
+show_missing = true
