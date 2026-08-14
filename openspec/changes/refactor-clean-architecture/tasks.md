@@ -77,14 +77,14 @@ This repository was `git init`-ed locally this session and **has no remote confi
 
 ## Phase 1a: Domain core — counting, detections, errors
 
-- [ ] 1.1 RED `tests/domain/test_counting.py`: known target class carries its Spanish label + emoji; non-target class excluded (detection-counting "Target Class Set and Display Labels"; PRESERVE 1)
-- [ ] 1.2 GREEN: `domain/detections.py` (`BoundingBox`, `Detection`) + `domain/counting.py` (`TargetClass`, `TARGET_CLASSES`, `CountingPolicy` skeleton) to pass 1.1
-- [ ] 1.3 RED `tests/domain/test_counting.py`: below-threshold detection discarded; default threshold `0.4` with no config (detection-counting "Confidence Threshold Filtering"; PRESERVE 2)
-- [ ] 1.4 GREEN: implement threshold filtering + default in `CountingPolicy`
-- [ ] 1.5 RED `tests/domain/test_counting.py`: `CountSnapshot` reflects filtered detections; same input twice ⇒ equal snapshots, no I/O/mocks (detection-counting "Count Snapshot Production")
-- [ ] 1.6 GREEN: `CountSnapshot` dataclass + `CountingPolicy.apply()`
-- [ ] 1.7 RED `tests/domain/test_errors.py`: typed exceptions exist and are distinct types (`CameraUnavailable`, `FrameReadFailed`, `InferenceFailed`, `ExportFailed`, `InvalidConfiguration`, `InvalidTransition`) (FT6, replaces FIX 7/11)
-- [ ] 1.8 GREEN: `domain/errors.py`
+- [x] 1.1 RED `tests/domain/test_counting.py`: known target class carries its Spanish label + emoji; non-target class excluded (detection-counting "Target Class Set and Display Labels"; PRESERVE 1)
+- [x] 1.2 GREEN: `domain/detections.py` (`BoundingBox`, `Detection`) + `domain/counting.py` (`TargetClass`, `TARGET_CLASSES`, `CountingPolicy` skeleton) to pass 1.1
+- [x] 1.3 RED `tests/domain/test_counting.py`: below-threshold detection discarded; default threshold `0.4` with no config (detection-counting "Confidence Threshold Filtering"; PRESERVE 2)
+- [x] 1.4 GREEN: implement threshold filtering + default in `CountingPolicy`
+- [x] 1.5 RED `tests/domain/test_counting.py`: `CountSnapshot` reflects filtered detections; same input twice ⇒ equal snapshots, no I/O/mocks (detection-counting "Count Snapshot Production")
+- [x] 1.6 GREEN: `CountSnapshot` dataclass + `CountingPolicy.apply()`
+- [x] 1.7 RED `tests/domain/test_errors.py`: typed exceptions exist and are distinct types (`CameraUnavailable`, `FrameReadFailed`, `InferenceFailed`, `ExportFailed`, `InvalidConfiguration`, `InvalidTransition`) (FT6, replaces FIX 7/11)
+- [x] 1.8 GREEN: `domain/errors.py`
 
 ## Phase 1b: Domain core — retry, metrics, session, config, events, dependency rule
 
