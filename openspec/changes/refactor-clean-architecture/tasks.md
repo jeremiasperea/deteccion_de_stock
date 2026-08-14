@@ -88,12 +88,12 @@ This repository was `git init`-ed locally this session and **has no remote confi
 
 ## Phase 1b: Domain core — retry, metrics, session, config, events, dependency rule
 
-- [ ] 1.9 RED `tests/domain/test_retry.py`: `delay_for`/`is_exhausted` match D-E schedule tables for camera (base 0.25s, cap 4.0s, 8 attempts, degrade after 2) and inference (0.25s/1.0s/3/2) (FT1; capture-session "Retry With Bounded Backoff")
-- [ ] 1.10 GREEN: `domain/retry.py` `RetryPolicy`
-- [ ] 1.11 RED `tests/domain/test_metrics.py`: `FpsMeter` computes FPS from monotonic timestamps (PRESERVE 7 support)
-- [ ] 1.12 GREEN: `domain/metrics.py` `FpsMeter`
-- [ ] 1.13 RED `tests/domain/test_session.py`: legal-transition table incl. `IDLE→STARTING→RUNNING`, `RUNNING↔DEGRADED`, ordered-shutdown states (FT2; capture-session "Explicit Session States")
-- [ ] 1.14 GREEN: `domain/session.py` `SessionState` enum + transition table
+- [x] 1.9 RED `tests/domain/test_retry.py`: `delay_for`/`is_exhausted` match D-E schedule tables for camera (base 0.25s, cap 4.0s, 8 attempts, degrade after 2) and inference (0.25s/1.0s/3/2) (FT1; capture-session "Retry With Bounded Backoff")
+- [x] 1.10 GREEN: `domain/retry.py` `RetryPolicy`
+- [x] 1.11 RED `tests/domain/test_metrics.py`: `FpsMeter` computes FPS from monotonic timestamps (PRESERVE 7 support)
+- [x] 1.12 GREEN: `domain/metrics.py` `FpsMeter`
+- [x] 1.13 RED `tests/domain/test_session.py`: legal-transition table incl. `IDLE→STARTING→RUNNING`, `RUNNING↔DEGRADED`, ordered-shutdown states (FT2; capture-session "Explicit Session States")
+- [x] 1.14 GREEN: `domain/session.py` `SessionState` enum + transition table
 - [ ] 1.15 RED `tests/domain/test_config.py`: `AppConfig.from_mapping` coercion/validation, defaults per D-A key table, `InvalidConfiguration` on bad input, `..` traversal in `model_weights` raises (D-A; runtime-configuration "Configurable Confidence Threshold"; Threat Matrix filesystem-input safeguard, FIX 9)
 - [ ] 1.16 GREEN: `domain/config.py` `AppConfig` + `from_mapping`
 - [ ] 1.17 RED `tests/domain/test_events.py`: `AppEvent` hierarchy + `EventClass` distinguish frame/state/log event kinds (supports D2, FT3)
