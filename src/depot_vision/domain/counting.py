@@ -71,7 +71,10 @@ class CountingPolicy:
             target_class = TARGET_CLASSES.get(detection.class_name)
             if target_class is None:
                 continue
-            if detection.confidence < self.confidence_threshold:
+            # Strictly-greater comparison, matching the monolith's `conf > 0.4`
+            # (app.py:130): a detection exactly at the threshold is discarded.
+            # PRESERVE 2 pins observable behavior, not just the default value.
+            if detection.confidence <= self.confidence_threshold:
                 continue
             counts[target_class] += 1
         return CountSnapshot(counts=counts)

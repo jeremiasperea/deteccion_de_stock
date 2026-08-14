@@ -54,13 +54,17 @@ class TestBelowThresholdDetectionDiscarded:
         assert sum(snapshot.counts.values()) == 0
 
 
-    def test_detection_at_exactly_the_threshold_is_kept(self) -> None:
+    def test_detection_at_exactly_the_threshold_is_discarded(self) -> None:
+        """Boundary case pinned to the monolith: `app.py:130` uses `conf > 0.4`,
+        so a detection exactly at the threshold does NOT count. Preserving this
+        is required by PRESERVE 2; changing it would be undeclared accuracy
+        tuning, which the proposal lists as a non-goal."""
         policy = CountingPolicy(confidence_threshold=0.4)
         detections = [_detection("chair", confidence=0.4)]
 
         snapshot = policy.apply(detections)
 
-        assert snapshot.count_for(TARGET_CLASSES["chair"]) == 1
+        assert snapshot.count_for(TARGET_CLASSES["chair"]) == 0
 
 
 class TestDefaultThresholdAppliesWithoutConfiguration:
