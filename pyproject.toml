@@ -8,6 +8,9 @@ requires-python = ">=3.10"
 minversion = "7.4"
 testpaths = ["tests"]
 addopts = "-ra"
+# src-layout: depot_vision is not installed (no editable install), so pytest
+# needs pythonpath to import it directly from source during collection.
+pythonpath = ["src"]
 
 [tool.ruff]
 target-version = "py310"
@@ -29,10 +32,7 @@ explicit_package_bases = true
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
-# "src" is intentionally omitted until Phase 1 creates src/depot_vision/ — mypy
-# errors on a `files` entry that does not exist yet. Phase 1 task must add "src"
-# back to this list once the package exists.
-files = ["tests", "scripts"]
+files = ["src", "tests", "scripts"]
 
 [[tool.mypy.overrides]]
 module = "tests.*"

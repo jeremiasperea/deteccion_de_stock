@@ -22,10 +22,17 @@ The system MUST recognize exactly the ten target classes used today, each with i
 
 ### Requirement: Confidence Threshold Filtering
 
-The system MUST discard raw detections below the active confidence threshold and MUST default that threshold to `0.4` when no configuration is supplied. (PRESERVE 2)
+The system MUST discard raw detections whose confidence is **at or below** the active confidence threshold, and MUST default that threshold to `0.4` when no configuration is supplied. (PRESERVE 2)
+
+The comparison is strictly-greater-than: a detection counts only when its confidence *exceeds* the threshold. This mirrors the monolith's `conf > 0.4` (`app.py:130`) exactly. PRESERVE 2 pins observable behavior, not merely the default value, and altering the boundary would be undeclared accuracy tuning — an explicit non-goal of this change.
 
 #### Scenario: Below-threshold detection discarded
 - GIVEN a raw detection with confidence below the active threshold
+- WHEN the counting policy processes it
+- THEN the detection MUST NOT contribute to the count snapshot
+
+#### Scenario: Detection exactly at the threshold discarded
+- GIVEN a raw detection whose confidence equals the active threshold exactly
 - WHEN the counting policy processes it
 - THEN the detection MUST NOT contribute to the count snapshot
 
