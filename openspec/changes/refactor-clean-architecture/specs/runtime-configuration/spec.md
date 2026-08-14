@@ -44,9 +44,9 @@ The UI event queue's capacity bound MUST be configurable rather than hardcoded. 
 
 ### Requirement: Pinned Flet Dependency Compatible With Target Image API
 
-The resolved Flet dependency version MUST support the `Image.src_bytes` property used by the presentation layer. (replaces FIX 10)
+The resolved Flet dependency version MUST support assigning `bytes` directly to `Image.src`. (replaces FIX 10)
 
-#### Scenario: Installed version supports src_bytes
+#### Scenario: Installed version accepts bytes for Image.src
 - GIVEN the project's pinned dependency floor
 - WHEN the installed Flet version is checked
-- THEN it MUST be at or above the version that documents `src_bytes` support
+- THEN `Image.src` MUST accept a `bytes` value directly, verified by a positive functional check (constructing `ft.Image(src=b"...")` and asserting the value survives as `bytes`), not by checking for a separate `src_bytes` attribute

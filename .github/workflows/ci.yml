@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -r requirements-dev.txt
+      - run: mypy
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -r requirements-dev.txt
+      - run: pytest
+
+  # Design decision D-G pins flet>=0.84.0,<0.86.0 on the assumption that the
+  # resolved install accepts bytes assigned directly to Image.src. This job
+  # asserts that capability functionally against whatever version actually
+  # resolves, and fails the build rather than letting a silent runtime
+  # fallback ship. (Corrected: an earlier version of this check asserted
+  # hasattr(ft.Image, "src_bytes"), which was based on a false premise — see
+  # openspec/changes/refactor-clean-architecture/explore.md section 1 — and
+  # failed unconditionally on every version in the pinned range.) It installs
+  # only the flet pin, not the full requirements.txt heavy stack
+  # (opencv/ultralytics/pandas/numpy) — that install belongs to Phase 3, not
+  # Phase 0.
+  flet-capability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install "flet>=0.84.0,<0.86.0"
+      - run: python scripts/check_flet_capability.py

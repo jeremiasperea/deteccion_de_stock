@@ -55,13 +55,25 @@ This repository was `git init`-ed locally this session and **has no remote confi
 
 ## Phase 0: Toolchain (blocking — no RED test can execute until this lands)
 
-- [ ] 0.1 Create Linux-native venv (`python3.10 -m venv .venv`); do NOT reuse the existing Windows-layout `.venv/` (Proposal Phase 0)
-- [ ] 0.2 Create `pyproject.toml`: `pytest`, `ruff`, `mypy`, `coverage` config sections (Success Criteria)
-- [ ] 0.3 Create pinned `requirements.txt` incl. `flet>=0.84.0,<0.86.0` + pinned floors for opencv-python, ultralytics, pandas, numpy (D-G)
-- [ ] 0.4 Create `.github/workflows/ci.yml`: ruff + mypy + pytest jobs (Success Criteria)
-- [ ] 0.5 Write `tests/architecture/test_monolith_frozen.py` asserting `sha256(app.py)` equals the baseline digest `8f47847d27acb716451f6eef13ce4858941c4c713798886cd008dea8fbb3e7fe` (computed from `193c577:app.py`; the working tree matches). Use this literal — do not recompute at test time, which would make the assertion vacuous (app.py Decomposition table, Phase 0 row)
-- [ ] 0.6 Add CI job asserting `hasattr(ft.Image, "src_bytes")` on the resolved Flet install, failing the build if absent (D-G, FIX 10, Open Question 2)
-- [ ] 0.7 Verify: clean checkout → venv → `pytest` runs green (0 tests) and `ruff`/`mypy` run clean (Success Criteria)
+- [x] 0.1 **ORCHESTRATOR OVERRIDE — venv location changed.** Original text: "Create Linux-native venv (`python3.10 -m venv .venv`)". Do NOT do that: the existing `.venv/` is a Windows-layout virtualenv (`Scripts/`, `Lib/`, a PE32+ `python.exe`) and may be the user's real Windows runtime for the camera-dependent D3 gate; overwriting it is destructive and not recoverable from this repo. Instead created the Linux venv at **`.venv-linux/`**, left `.venv/` completely untouched, and added `.venv-linux/` to `.gitignore` (`.venv/` was already ignored).
+- [x] 0.2 Create `pyproject.toml`: `pytest`, `ruff`, `mypy`, `coverage` config sections (Success Criteria). `mypy.files` intentionally omits `src` until Phase 1 creates `src/depot_vision/` (mypy hard-errors on a configured path that does not exist yet — Phase 1 must add `"src"` back to `tool.mypy.files`). `ruff.extend-exclude` excludes `app.py` — it is the frozen monolith (see 0.5), not in-scope for lint/format until Phase 5b lifts the freeze.
+- [x] 0.3 **ORCHESTRATOR OVERRIDE — split install.** `requirements.txt` still pins everything per D-G (`flet>=0.84.0,<0.86.0` + floors for opencv-python/ultralytics/pandas/numpy), but only `flet` was installed into `.venv-linux/` in Phase 0 — `opencv-python`, `ultralytics`, `pandas`, `numpy` are multi-GB and not needed until Phase 3's adapters. Added **`requirements-dev.txt`** (`pytest`, `pytest-cov`, `ruff`, `mypy`) for the tooling actually installed now. **Phase 3 owns installing the heavy runtime stack** from `requirements.txt` before its adapter tasks (3.1+) begin.
+- [x] 0.4 Create `.github/workflows/ci.yml`: `lint` (ruff), `typecheck` (mypy), `test` (pytest) jobs, each installing only `requirements-dev.txt` — not the heavy stack (Success Criteria)
+- [x] 0.5 Write `tests/architecture/test_monolith_frozen.py` asserting `sha256(app.py)` equals the baseline digest `8f47847d27acb716451f6eef13ce4858941c4c713798886cd008dea8fbb3e7fe` (computed from `193c577:app.py`; the working tree matches — verified via `sha256sum app.py` vs `git show 193c577:app.py | sha256sum`). Literal is hardcoded, not recomputed at test time (app.py Decomposition table, Phase 0 row)
+- [x] 0.6 Add CI job (`flet-capability`) + reusable `scripts/check_flet_capability.py` asserting that `Image.src` accepts `bytes` directly — a positive functional check (construct `ft.Image(src=b"...")`, assert the value survives as `bytes`), failing the build if it does not, and reporting the resolved Flet version (D-G, corrected). **Original assertion (`hasattr(ft.Image, "src_bytes")`) was based on a false premise — see `explore.md` section 1 — and failed unconditionally on every version in the pinned range; corrected to a functional check on `Image.src` itself, which now passes.**
+- [x] 0.7 Verify: clean state → `.venv-linux/` → `pytest` runs green, `ruff` runs clean, `mypy` runs clean (Success Criteria). See verbatim command output in apply-progress / PR 0 description.
+
+### Phase 0 Finding — D-G / Open Question 2, now resolved (was: falsified premise)
+
+`scripts/check_flet_capability.py`'s original assertion (`hasattr(ft.Image, "src_bytes")`) failed against every Flet version actually resolvable in the pinned range, because the premise itself was false, not because of a real capability gap:
+
+- Resolved version in `.venv-linux/`: **flet 0.85.3** (within the `>=0.84.0,<0.86.0` pin).
+- `hasattr(ft.Image, "src_bytes")` → **`False`**. Also checked against `flet==0.84.0` (the pin floor) via a throwaway venv: same absence.
+- Verified against the installed package source (not inferred, not from documentation): `Image.__init__` takes `src: Union[str, bytes]` directly — raw bytes are assigned straight to `src`. There is no separate `src_bytes` attribute in this Flet generation at all — it is not merely missing on this range, it never existed as a distinct field.
+- `app.py:164`'s existing `img_ctrl.src = fb` (raw JPEG bytes) is therefore **already correct**, supported usage — not a defect. **FIX 1 is withdrawn.**
+- **Resolution (supersedes the (a)/(b) decision this section originally deferred to Phase 5)**: option (a) — design against `Image.src = <bytes>` directly — is confirmed correct. The port already returns `EncodedImage(data, media_type)`, so only `presentation/event_renderer.py` is affected, and it needs no behavior change from what `app.py:164` already does. `gapless_playback=True` survives independently as **ENH-1** (see `explore.md` section 1, `proposal.md` D3).
+- `scripts/check_flet_capability.py` is corrected to the positive functional check described in task 0.6 above and now **passes**.
+- This resolves design Open Question 2; it is no longer open (see `design.md` D-G and Open Questions).
 
 ## Phase 1a: Domain core — counting, detections, errors
 
@@ -148,7 +160,7 @@ This repository was `git init`-ed locally this session and **has no remote confi
 
 ## Phase 5a: Presentation — event rendering, theme, DEGRADED indicator
 
-- [ ] 5.1 RED `tests/presentation/test_event_renderer.py`: `FrameRendered` → bytes assigned to `Image.src_bytes` (not `src`), `gapless_playback=True` (live-video-presentation "Frame Rendering via src_bytes"; FIX 1)
+- [ ] 5.1 RED `tests/presentation/test_event_renderer.py`: `FrameRendered` → bytes assigned to `Image.src` (this is the existing `app.py:164` behavior, now confirmed correct on the pinned Flet — FIX 1 withdrawn, no separate `src_bytes` property exists), `gapless_playback=True` (live-video-presentation "Frame Rendering via Image.src (bytes)"; ENH-1)
 - [ ] 5.2 GREEN: `presentation/event_renderer.py` (event → control mapping) + `presentation/theme.py`
 - [ ] 5.3 RED `tests/presentation/test_event_renderer.py`: `SessionStateChanged(DEGRADED)` → distinct indicator visible; back to `RUNNING` → indicator cleared (live-video-presentation "DEGRADED Indicator Visibility"; D1)
 - [ ] 5.4 GREEN: implement DEGRADED indicator in `event_renderer.py`
@@ -169,7 +181,7 @@ This repository was `git init`-ed locally this session and **has no remote confi
 
 ## Human Validation Gate (blocking — between Phase 5 and Phase 6)
 
-- [ ] G.1 **[Human-performed, not automatable]** User runs the app on the target machine with a real camera; confirms the live feed renders correctly via `src_bytes` before Phase 6 proceeds (D3; live-video-presentation "Mandatory user validation gate before Phase 6"). Phase 6 tasks MUST NOT start until this is explicitly confirmed.
+- [ ] G.1 **[Human-performed, not automatable]** User runs the app on the target machine with a real camera; confirms the live feed and the rewired session controls (event bus, drain loop, `DEGRADED` indicator, `SessionController` wiring) behave correctly before Phase 6 proceeds (D3, rewritten rationale — the gate covers the Phase 5 presentation-layer rewiring, not an image-API behavior change, since FIX 1 is withdrawn; live-video-presentation "Mandatory user validation gate before Phase 6"). Phase 6 tasks MUST NOT start until this is explicitly confirmed.
 
 ## Phase 6: Strangler cleanup
 

@@ -6,19 +6,19 @@ Defines frame annotation/encoding, live feed rendering, and delivery of UI/sessi
 
 ## Requirements
 
-### Requirement: Frame Rendering via src_bytes
+### Requirement: Frame Rendering via Image.src (bytes)
 
-The rendered frame MUST be assigned to the Flet `Image.src_bytes` property, and the image control MUST set `gapless_playback=True`. (FIX 1)
+The rendered frame MUST be assigned to the Flet `Image.src` property as `bytes`, and the image control MUST set `gapless_playback=True`. (ENH-1; FIX 1 withdrawn — `Image.src` accepting `bytes` directly is correct, verified against the installed Flet package; there is no separate `src_bytes` property in the pinned range. See `explore.md` section 1.)
 
-#### Scenario: Encoded frame assigned to src_bytes
+#### Scenario: Encoded frame assigned to Image.src as bytes
 - GIVEN an annotated frame has been JPEG-encoded to bytes
 - WHEN the presentation layer updates the image control
-- THEN the bytes MUST be assigned to `src_bytes`, not `src`, and `gapless_playback` MUST be `True`
+- THEN the bytes MUST be assigned to `src` (there is no separate `src_bytes` property on the pinned Flet), and `gapless_playback` MUST be `True`
 
 #### Scenario: Mandatory user validation gate before Phase 6 (D3)
-- GIVEN the Phase 5 presentation slice is complete
+- GIVEN the Phase 5 presentation slice is complete, having rewired image rendering, the bounded event bus and its drain loop, the `DEGRADED` indicator, and session-control wiring onto `SessionController` for the first time
 - WHEN the user runs the application on the target machine with a real camera
-- THEN the user MUST confirm the live feed renders correctly before Phase 6 proceeds; this confirmation is a mandatory exit criterion, not an automated test
+- THEN the user MUST confirm the live feed renders correctly and the session controls behave correctly before Phase 6 proceeds; this confirmation is a mandatory exit criterion, not an automated test. (The gate is retained for the presentation-layer rewiring, not for an image-API behavior change — FIX 1 is withdrawn.)
 
 ### Requirement: Terminating UI Drain Loop
 
