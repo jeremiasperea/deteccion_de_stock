@@ -1,0 +1,42 @@
+# depot_vision configuration (copy to depot_vision.ini and edit).
+#
+# Precedence: command-line flags > DEPOT_VISION_* environment > this file > defaults.
+# File search order (first hit wins, files are not merged):
+#   1. $DEPOT_VISION_CONFIG
+#   2. ./depot_vision.ini
+#   3. ~/.config/depot_vision/config.ini
+# A missing file is not an error. Every key is optional; omitted keys use the
+# default shown. Equivalent env var: DEPOT_VISION_<KEY> (e.g. DEPOT_VISION_TARGET_FPS);
+# equivalent flag: --<key-with-dashes> (e.g. --target-fps 15).
+
+[depot_vision]
+# Minimum detection confidence, in [0, 1]. A detection exactly at the threshold is discarded.
+confidence_threshold = 0.4
+
+# Model weights. A relative name resolves inside the installed package
+# (depot_vision/weights/), never against the working directory. An absolute
+# path is accepted as an explicit override. ".." segments are rejected in
+# relative names.
+model_weights = yolov8n.pt
+
+# Directory for CSV exports; created on demand. "~" expands to the home directory.
+export_dir = ~
+
+# Camera device index (>= 0) and requested capture size in pixels.
+camera_index = 0
+frame_width = 640
+frame_height = 480
+
+# Target frames per second (>= 1).
+target_fps = 30
+
+# Event queue bounds: durable events are never dropped; a saturation diagnostic is
+# raised at the soft capacity and the session faults at the hard ceiling (>= soft).
+queue_soft_capacity = 1024
+queue_hard_ceiling = 8192
+
+# Seconds to wait for the capture worker to stop (> 0).
+stop_timeout_s = 5.0
+
+# Number of log lines retained in the UI.
+log_retention = 200

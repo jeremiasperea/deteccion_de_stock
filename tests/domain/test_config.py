@@ -7,10 +7,11 @@ filesystem access is needed.
 from __future__ import annotations
 
 import dataclasses
+from pathlib import PurePath, PurePosixPath, PureWindowsPath
 
 import pytest
 
-from depot_vision.domain.config import AppConfig
+from depot_vision.domain.config import WEIGHTS_DIR, AppConfig
 from depot_vision.domain.errors import InvalidConfiguration
 
 
@@ -128,3 +129,69 @@ class TestModelWeightsTraversalGuard:
         assert AppConfig.from_mapping({"model_weights": "yolo..v2.pt"}).model_weights == (
             "yolo..v2.pt"
         )
+
+
+class TestModelWeightsResolution:
+    def test_weights_dir_is_package_relative(self) -> None:
+        assert WEIGHTS_DIR.parts[-2:] == ("depot_vision", "weights")
+
+    def test_relative_name_resolves_under_package_weights_dir(self) -> None:
+        location = AppConfig().resolve_model_weights()
+
+        assert location.path == WEIGHTS_DIR / "yolov8n.pt"
+        assert location.is_override is False
+
+    def test_nested_relative_name_resolves_under_weights_dir(self) -> None:
+        location = AppConfig(model_weights="sub/yolo.pt").resolve_model_weights()
+
+        assert location.path == WEIGHTS_DIR / "sub" / "yolo.pt"
+
+    def test_resolution_ignores_cwd_and_honors_injected_weights_dir(self) -> None:
+        base = PurePosixPath("/opt/pkg/depot_vision/weights")
+
+        location = AppConfig().resolve_model_weights(weights_dir=base)
+
+        assert location.path == base / "yolov8n.pt"
+
+    def test_absolute_posix_path_is_accepted_and_flagged_as_override(self) -> None:
+        location = AppConfig(model_weights="/models/custom.pt").resolve_model_weights()
+
+        assert location.path == PurePath("/models/custom.pt")
+        assert location.is_override is True
+
+    def test_absolute_windows_path_is_accepted_and_flagged_as_override(self) -> None:
+        location = AppConfig(model_weights="C:\\models\\custom.pt").resolve_model_weights()
+
+        assert location.path == PureWindowsPath("C:\\models\\custom.pt")
+        assert location.is_override is True
+
+    def test_absolute_path_may_contain_dotdot_since_it_is_an_explicit_override(self) -> None:
+        config = AppConfig.from_mapping({"model_weights": "/models/../other/custom.pt"})
+
+        assert config.resolve_model_weights().is_override is True
+
+    def test_relative_traversal_is_still_rejected(self) -> None:
+        with pytest.raises(InvalidConfiguration, match="model_weights"):
+            AppConfig.from_mapping({"model_weights": "../evil.pt"})
+
+
+class TestExportDirResolution:
+    def test_default_expands_to_injected_home(self) -> None:
+        home = PurePosixPath("/home/operator")
+
+        assert AppConfig().resolve_export_dir(home) == home
+
+    def test_tilde_prefix_expands_under_home(self) -> None:
+        home = PurePosixPath("/home/operator")
+
+        assert AppConfig(export_dir="~/exports").resolve_export_dir(home) == home / "exports"
+
+    def test_absolute_dir_is_returned_unchanged(self) -> None:
+        home = PurePosixPath("/home/operator")
+
+        assert AppConfig(export_dir="/data/out").resolve_export_dir(home) == PurePath("/data/out")
+
+    def test_relative_dir_without_tilde_is_not_rewritten(self) -> None:
+        home = PurePosixPath("/home/operator")
+
+        assert AppConfig(export_dir="out").resolve_export_dir(home) == PurePath("out")

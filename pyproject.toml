@@ -45,3 +45,14 @@ branch = true
 [tool.coverage.report]
 fail_under = 0
 show_missing = true
+
+[tool.importlinter]
+root_package = "depot_vision"
+
+# Staged layering (D-F): contracts grow as layers land. Initially only the
+# ports -> domain direction exists; adapters, application and presentation
+# are appended in later phases.
+[[tool.importlinter.contracts]]
+name = "Layered architecture"
+type = "layers"
+layers = ["depot_vision.ports", "depot_vision.domain"]

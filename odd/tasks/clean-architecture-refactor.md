@@ -68,8 +68,14 @@ Accepted T1b design choices (design.md left them open): `EventClass` = FRAME/STA
 is droppable. Config validation runs in `__post_init__`; package-relative weights and
 `export_dir` expansion deferred to T2 (2.5/2.6).
 
-### T2 — Ports + config resolution
-- [ ] 2.1–2.9
+### T2 — Ports + config resolution (route: delegated writer; trigger: 6 new + 5 modified files)
+- [x] 2.1–2.9 (F2 item 3 resolved: `..` guard applies only to relative weights names)
+
+Accepted T2 choices: resolution is pure path math in domain (`resolve_model_weights` →
+`ModelWeightsLocation(path, is_override)`; T3a detector adapter must log overrides);
+`resolve_export_dir(home)`; INI section `[depot_vision]`; flags `--key-with-dashes`,
+unknown flags ignored; missing `$DEPOT_VISION_CONFIG` falls through; new CI
+`architecture` job runs `PYTHONPATH=src lint-imports`.
 
 ### T3a — Adapters: capture, detector, clock (installs heavy runtime stack)
 - [ ] 3.1–3.8
@@ -106,7 +112,11 @@ is droppable. Config validation runs in `__post_init__`; package-relative weight
   RDD: assessed medium (slice_budget_reached) → consent granted → 1 lens (reliability)
   → approved, acknowledged, authority burned (lineage review-67e9229342a34cbf).
   Reviewed boundary advances to ef91954. Non-blocking suggestions logged as F2.
+- T2: RED observed for ports (ImportError Clock), provider (ModuleNotFoundError),
+  weights resolution (ImportError WEIGHTS_DIR), import-linter (temporary probe import).
+  `pytest` 107 passed, `ruff check` clean, `mypy` clean (27 files), `lint-imports`
+  1 kept / 0 broken; parent spot check re-ran pytest, mypy, lint-imports. ~560 lines.
 
 ## Next step
 
-T2 (delegated writer) on `refactor/ca-2-ports`.
+RDD assess on T2 commit, then T3a.

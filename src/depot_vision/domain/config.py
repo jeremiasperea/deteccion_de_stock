@@ -3,8 +3,10 @@
 Adapters gather string layers (CLI > env > INI > defaults) into one
 ``Mapping[str, str]``; ``AppConfig.from_mapping`` does all coercion and
 validation here in the domain and raises ``InvalidConfiguration``. No
-environment or filesystem access happens in this module. Resolution of
-``model_weights`` / ``export_dir`` to real paths is an adapter concern.
+environment or filesystem access happens in this module: ``resolve_*``
+only compute paths (pure ``PurePath`` operations) from injected inputs.
+A ``ModelWeightsLocation`` flags absolute overrides so the adapter that
+consumes it can log them; the domain itself never logs.
 See openspec/changes/refactor-clean-architecture/specs/runtime-configuration/spec.md
 """
 
@@ -14,12 +16,25 @@ import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import PurePath, PurePosixPath, PureWindowsPath
 from typing import TypeVar
 
 from depot_vision.domain.counting import DEFAULT_CONFIDENCE_THRESHOLD
 from depot_vision.domain.errors import InvalidConfiguration
 
 _T = TypeVar("_T", str, int, float)
+
+#: Where relative ``model_weights`` names resolve: ``depot_vision/weights/``,
+#: derived from this module's location, never from the working directory.
+WEIGHTS_DIR: PurePath = PurePath(__file__).parent.parent / "weights"
+
+
+@dataclass(frozen=True)
+class ModelWeightsLocation:
+    """Resolved weights path; ``is_override`` is True for an absolute configured path."""
+
+    path: PurePath
+    is_override: bool
 
 
 def _check_positive_int(name: str, value: int) -> None:
@@ -34,6 +49,10 @@ def _check_non_empty(name: str, value: str) -> None:
 
 def _has_parent_traversal(path: str) -> bool:
     return ".." in re.split(r"[\\/]", path)
+
+
+def _is_absolute(path: str) -> bool:
+    return PurePosixPath(path).is_absolute() or PureWindowsPath(path).is_absolute()
 
 
 @dataclass(frozen=True)
@@ -60,7 +79,9 @@ class AppConfig:
                 f"confidence_threshold must be within [0, 1], got {self.confidence_threshold}"
             )
         _check_non_empty("model_weights", self.model_weights)
-        if _has_parent_traversal(self.model_weights):
+        # An absolute path is an explicit operator override, so only relative
+        # names (which resolve under the package weights dir) are traversal-guarded.
+        if not _is_absolute(self.model_weights) and _has_parent_traversal(self.model_weights):
             raise InvalidConfiguration(
                 f"model_weights must not contain '..' path segments, got {self.model_weights!r}"
             )
@@ -82,6 +103,25 @@ class AppConfig:
                 f"stop_timeout_s must be a finite number > 0, got {self.stop_timeout_s}"
             )
         _check_positive_int("log_retention", self.log_retention)
+
+    def resolve_model_weights(self, weights_dir: PurePath = WEIGHTS_DIR) -> ModelWeightsLocation:
+        """Relative names resolve under ``weights_dir``; absolute paths are overrides."""
+        if _is_absolute(self.model_weights):
+            # Keep the flavour of the configured path (POSIX vs Windows).
+            override: PurePath = (
+                PurePosixPath(self.model_weights)
+                if PurePosixPath(self.model_weights).is_absolute()
+                else PureWindowsPath(self.model_weights)
+            )
+            return ModelWeightsLocation(path=override, is_override=True)
+        return ModelWeightsLocation(path=weights_dir / self.model_weights, is_override=False)
+
+    def resolve_export_dir(self, home: PurePath) -> PurePath:
+        """Expand a leading ``~`` against the injected ``home``; otherwise unchanged."""
+        parts = re.split(r"[\\/]", self.export_dir)
+        if parts[0] == "~":
+            return home.joinpath(*[part for part in parts[1:] if part])
+        return PurePath(self.export_dir)
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, str]) -> AppConfig:
