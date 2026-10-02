@@ -1,0 +1,28 @@
+{
+  "names": {
+    "0": "person",
+    "39": "bottle"
+  },
+  "detections": [
+    {
+      "class_id": 0,
+      "confidence": 0.91,
+      "xyxy": [
+        4.2,
+        6.7,
+        40.0,
+        44.9
+      ]
+    },
+    {
+      "class_id": 39,
+      "confidence": 0.55,
+      "xyxy": [
+        10.0,
+        12.0,
+        30.5,
+        30.5
+      ]
+    }
+  ]
+}

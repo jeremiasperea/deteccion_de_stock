@@ -37,7 +37,8 @@ references; this document is the live checklist (ODD now drives execution).
 ## Delivery
 
 - Branches: one per slice. T1b: `refactor/ca-1b-domain` (from `main` @ c5f2c01).
-  T2: `refactor/ca-2-ports` (from `refactor/ca-1b-domain`).
+  T2 + F3: `refactor/ca-2-ports` (from `refactor/ca-1b-domain`).
+  T3a: `refactor/ca-3a-adapters` (from `refactor/ca-2-ports`).
 - Strategy: `auto-chain` (inherited). Chain strategy: `stacked-to-main` (user choice
   2026-10-02): each PR targets the previous slice branch; merged to `main` in order.
 - Forecast remaining: ~4000 authored lines.
@@ -78,6 +79,9 @@ Task text and spec references: `openspec/changes/refactor-clean-architecture/tas
   - `layered_config_provider.py:27-29` misleading parser name; `pyproject.toml:52-58`
     stale import-linter comment.
   - `layered_config_provider.py:41-42` empty `argv` default silently ignored the CLI.
+- [ ] F4 follow-up (F3 review warnings, non-blocking): `from_mapping` key duplication
+  (`config.py:139-160`); INI inline comments not stripped (`layered_config_provider.py:82`).
+- [ ] F5 follow-up: extend import-linter to adapters (planned in 4.12).
 
 Accepted T1b design choices (design.md left them open): `EventClass` = FRAME/STATE/LOG;
 `SessionFault` and `QueueSaturated` classified LOG (durable lane per D-C); only FRAME
@@ -93,8 +97,18 @@ Accepted T2 choices: resolution is pure path math in domain (`resolve_model_weig
 unknown flags ignored; missing `$DEPOT_VISION_CONFIG` falls through; new CI
 `architecture` job runs `PYTHONPATH=src lint-imports`.
 
-### T3a — Adapters: capture, detector, clock (installs heavy runtime stack)
-- [ ] 3.1–3.8
+### T3a — Adapters: capture, detector, clock (route: delegated writer + inline fixes)
+- [x] 3.1–3.8
+
+Accepted T3a choices: capture/model factories injected (tests never touch a camera,
+download weights, or run inference); ultralytics imported lazily; `FakeClock` in
+`tests/fakes.py` (pytest `pythonpath` now `["src", "."]`); detector logs a warning on
+absolute weights override; `SystemClock.now()` returns naive local time (preserves the
+monolith's CSV timestamp format — writer's UTC choice reverted inline with RED→GREEN).
+CI: new `requirements-ci.txt` (opencv-python-headless, numpy, flet) for `test` and
+`typecheck` jobs; mypy override for missing `ultralytics`; `cast` instead of
+`type: ignore` in the YOLO factory. Fixed pre-existing CI break: `typecheck` lacked
+flet for `scripts/check_flet_capability.py`.
 
 ### T3b — Adapters: annotator, encoder, repository, exporter
 - [ ] 3.9–3.19
@@ -144,10 +158,17 @@ unknown flags ignored; missing `$DEPOT_VISION_CONFIG` falls through; new CI
   anchors (DID NOT RAISE), OSError probe (raw PermissionError), env/section warnings
   (caplog assert), required argv (DID NOT RAISE TypeError). `pytest` 117 passed, `ruff`
   clean, `mypy` clean (27 files), `lint-imports` 1 kept; parent re-ran pytest +
-  lint-imports. +120/-22.
+  lint-imports. +120/-22. Commit f646a1c (per-commit assess: medium, under_budget).
+  Selectorless preflight then required accumulated c5f2c01..f646a1c → granted →
+  4 lenses → approved, acknowledged, burned (lineage review-5f526048a9e7232e).
+  New non-blocking warnings logged as F4.
+- T3a: runtime stack installed in `.venv-linux` (torch CPU-only wheel: opencv 5.0.0,
+  ultralytics 8.4.171, torch 2.14.1+cpu, numpy 2.5.2, pandas 3.0.6). RED observed for
+  each adapter (ModuleNotFoundError) and for naive local `now()` (tzinfo assert).
+  `pytest` 140 passed, `ruff check` clean, `mypy` clean (35 files), `lint-imports`
+  1 kept — in `.venv-linux` AND a CI-like venv (dev + ci requirements only).
+  ~560 authored lines.
 
 ## Next step
 
-RDD assess on F3 commit, then T3a. T3a installs the heavy runtime stack
-(opencv-python, ultralytics → torch, pandas, numpy; multi-GB) into `.venv-linux`.
-T3a branch: `refactor/ca-3a-adapters` (from `refactor/ca-2-ports`).
+RDD assess on T3a commit, then T3b on `refactor/ca-3b-adapters`.

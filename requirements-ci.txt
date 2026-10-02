@@ -1,0 +1,7 @@
+# Lightweight runtime deps for CI adapter tests and typechecking.
+# Headless OpenCV avoids GUI libs; ultralytics/torch are NOT needed because
+# adapter tests inject fake models and ultralytics is imported lazily.
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+# scripts/check_flet_capability.py is typechecked too.
+flet>=0.84.0,<0.86.0
