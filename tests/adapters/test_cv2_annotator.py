@@ -2,15 +2,15 @@
 
 Goldens (``annotated_goldens.npz`` boxes/FPS alone, ``annotated_goldens_with_fps.npz``
 box then FPS in the monolith's draw order) were produced by the monolith's original
-drawing code (app.py ``detection_worker``) on ``frame_64x48.jpg``, not by the
-adapter, so they pin PRESERVE 3 independently of the implementation.
+drawing code (app.py ``detection_worker``) on the raw pixels of ``frame_64x48.jpg``
+(``frame_64x48_pixels.npy``, decoded once), not by the adapter, so they pin PRESERVE 3
+independently of the implementation.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import cv2
 import numpy as np
 import pytest
 
@@ -27,10 +27,8 @@ OVERLAY = Overlay(fps=12.34, frame_count=7)
 
 
 def _fixture_frame() -> Frame:
-    data = np.fromfile(str(FIXTURES / "frame_64x48.jpg"), dtype=np.uint8)
-    pixels = cv2.imdecode(data, cv2.IMREAD_COLOR)
-    assert pixels is not None
-    return Frame(pixels=pixels)
+    # Raw pixels stored once, so goldens never depend on a libjpeg decode.
+    return Frame(pixels=np.load(FIXTURES / "frame_64x48_pixels.npy"))
 
 
 def test_conforms_to_frame_annotator_port() -> None:

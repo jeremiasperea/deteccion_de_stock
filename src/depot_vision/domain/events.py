@@ -91,3 +91,14 @@ class QueueSaturated(AppEvent):
     @property
     def event_class(self) -> EventClass:
         return EventClass.LOG
+
+
+@dataclass(frozen=True)
+class ShutdownTimedOut(AppEvent):
+    """Diagnostic: the worker did not exit within ``timeout_s``; it is now an orphan."""
+
+    timeout_s: float
+
+    @property
+    def event_class(self) -> EventClass:
+        return EventClass.LOG

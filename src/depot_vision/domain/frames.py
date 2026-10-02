@@ -31,7 +31,8 @@ class EncodedImage:
 
 @dataclass(frozen=True)
 class Overlay:
-    """Live metrics drawn onto every rendered frame (FPS and frame counter)."""
+    """Live metrics for a rendered frame. Only ``fps`` is drawn onto the pixels;
+    ``frame_count`` is carried for the caller and is not drawn on the frame."""
 
     fps: float
     frame_count: int

@@ -40,6 +40,7 @@ references; this document is the live checklist (ODD now drives execution).
   T2 + F3: `refactor/ca-2-ports` (from `refactor/ca-1b-domain`).
   T3a: `refactor/ca-3a-adapters` (from `refactor/ca-2-ports`).
   T3b: `refactor/ca-3b-adapters` (from `refactor/ca-3a-adapters`).
+  T4a: `refactor/ca-4a-controller` (from `refactor/ca-3b-adapters`).
 - Strategy: `auto-chain` (inherited). Chain strategy: `stacked-to-main` (user choice
   2026-10-02): each PR targets the previous slice branch; merged to `main` in order.
 - Forecast remaining: ~4000 authored lines.
@@ -128,8 +129,23 @@ pixels with tolerance (libjpeg builds differ), annotator uses exact pixel golden
 generated from verbatim `app.py` drawing code; `requirements-ci.txt` + pandas, mypy
 `ignore_missing_imports` for pandas.
 
-### T4a — SessionController + ordered shutdown
-- [ ] 4.1–4.7
+### T4a — SessionController + ordered shutdown (route: delegated writer + inline fix)
+- [x] F7 (T3b review warnings): encoder raises typed `EncodingFailed` (new domain error,
+  added inline RED→GREEN); annotator goldens fed from stored raw pixels
+  (`frame_64x48_pixels.npy`), not a JPEG decode; `Overlay` docstring corrected.
+- [x] 4.1–4.7
+
+Accepted T4a choices: `stop()` is async (`begin_stop()` sync: STOPPING + signal; then
+optional `drain` callback → `join(timeout)` via `run_in_executor` → release); illegal
+commands return `False` without side effects; worker reports via `notify_running`,
+`notify_degraded`, `notify_recovered`, `notify_fault(error)`; a fault from RUNNING/PAUSED
+goes STOPPING → ERROR (table has no direct edge); a fault during STOPPING is only logged;
+`ShutdownTimedOut` LOG event added (named in design, was missing); `worker_live()` is
+true for current worker or any orphan — composition root wires it into the repository
+via a lambda/holder; `stop_timeout_s` required kw-arg. Threads injectable through
+`WorkerFactory`/`ThreadWorkerHandle` (application/worker.py).
+TDD note: `ThreadWorkerHandle` was written before its test (deviation from strict TDD,
+reported by the writer); its test is event-driven, no sleeps.
 
 ### T4b — Capture loop + bounded event bus
 - [ ] 4.8–4.13
@@ -190,7 +206,15 @@ generated from verbatim `app.py` drawing code; `requirements-ci.txt` + pandas, m
   widened port (mypy arg-type), annotator rewiring (10 golden failures), ExportFailed
   (temporary bare raise). `pytest` 183 passed, `ruff` clean, `mypy` clean (45 files),
   `lint-imports` 1 kept — both `.venv-linux` and CI-like venv; parent re-ran pytest + mypy.
+  Commit 64464ec. Accumulated c5f2c01..64464ec → granted → 4 lenses (one slot re-run
+  after a script dropped it; re-offered by bound STATUS) → approved, acknowledged,
+  burned (lineage review-a129ce70f6400491). Warnings became F7.
+- T4a: RED observed for F7a (2 failed), application modules (ModuleNotFoundError),
+  `ShutdownTimedOut` (ImportError), fault-in-STOPPING rule, `EncodingFailed`
+  (ImportError). `pytest` 253 passed ×4 runs (no flakiness), `ruff` clean, `mypy` clean
+  (52 files), `lint-imports` 1 kept — both envs; parent re-ran full suite in both.
+  `application/` imports only domain, ports and stdlib (grep-verified; contract in 4.12).
 
 ## Next step
 
-Review T3b commit, then T4a on `refactor/ca-4a-controller`.
+Review T4a commit, then T4b on `refactor/ca-4b-loop`.

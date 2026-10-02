@@ -23,6 +23,10 @@ class InferenceFailed(DepotVisionError):
     """Raised when an ObjectDetector fails to load or run inference."""
 
 
+class EncodingFailed(DepotVisionError):
+    """Raised when a FrameEncoder cannot encode a frame."""
+
+
 class ExportFailed(DepotVisionError):
     """Raised when a CountExporter fails to write its destination."""
 

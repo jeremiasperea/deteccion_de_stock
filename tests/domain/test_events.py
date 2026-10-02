@@ -20,6 +20,7 @@ from depot_vision.domain.events import (
     QueueSaturated,
     SessionFault,
     SessionStateChanged,
+    ShutdownTimedOut,
 )
 from depot_vision.domain.frames import EncodedImage
 from depot_vision.domain.session import SessionState
@@ -33,6 +34,7 @@ def _one_of_each() -> list[AppEvent]:
         DetectionLogged(message="2 x person"),
         SessionFault(error=CameraUnavailable("gone")),
         QueueSaturated(depth=1024),
+        ShutdownTimedOut(timeout_s=5.0),
     ]
 
 
@@ -46,6 +48,7 @@ class TestEventClass:
         assert classes == [
             EventClass.FRAME,
             EventClass.STATE,
+            EventClass.LOG,
             EventClass.LOG,
             EventClass.LOG,
             EventClass.LOG,
