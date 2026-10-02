@@ -42,6 +42,7 @@ references; this document is the live checklist (ODD now drives execution).
   T3b: `refactor/ca-3b-adapters` (from `refactor/ca-3a-adapters`).
   T4a: `refactor/ca-4a-controller` (from `refactor/ca-3b-adapters`).
   T4b: `refactor/ca-4b-loop` (from `refactor/ca-4a-controller`).
+  T5a: `refactor/ca-5a-presentation` (from `refactor/ca-4b-loop`).
 - Strategy: `auto-chain` (inherited). Chain strategy: `stacked-to-main` (user choice
   2026-10-02): each PR targets the previous slice branch; merged to `main` in order.
 - Forecast remaining: ~4000 authored lines.
@@ -167,8 +168,21 @@ Design correction (parent, T4b): `FrameRendered` carries `snapshot`, `fps`,
 FPS text, as the monolith's single `_update_ui` closure).
 T5b must: forward the bus's `SessionFault(QueueOverflow)` to `controller.notify_fault`.
 
-### T5a — Presentation: renderer, theme, DEGRADED indicator
-- [ ] 5.1–5.7
+### T5a — Presentation: renderer, theme, DEGRADED indicator (route: delegated writer)
+- [x] 5.1–5.7 (import-linter: `presentation` added on top of the layers contract)
+
+Accepted T5a choices: `RenderTargets(image, fps_text, stats_col, detect_log,
+degraded_indicator)` + `EventRenderer(targets, log_retention=200, now=...)`; renderer
+never calls `page.update()` (T5b view owns it); detection-log cadence enforced upstream
+by the capture loop, renderer renders every `DetectionLogged`; log stamped from injected
+`now`; IDLE/ERROR reset FPS text and placeholder (monolith `_restore`); log keeps
+exactly 200 entries (monolith kept 201). Buttons are T5b.
+Pending user confirmation (new UI copy, no monolith equivalent): `SessionFault` →
+`💥 {ErrorType}: {msg}`; `QueueSaturated` → `⚠️ Cola de eventos saturada (profundidad N)`;
+`ShutdownTimedOut` → `⚠️ El hilo no finalizó en Xs y quedó huérfano`; DEGRADED label →
+`⚠️ Cámara degradada — reintentando...`.
+Check at gate G.1: button hover bgcolor uses `ControlState.DEFAULT`/`HOVERED` keys
+instead of the monolith's raw `""`/`"hovered"`.
 
 ### T5b — View wiring, drain loop, app.py rewiring
 - [ ] 5.8–5.15
@@ -237,8 +251,16 @@ T5b must: forward the bus's `SessionFault(QueueOverflow)` to `controller.notify_
   capture loop + bus (ModuleNotFoundError), import-linter (old contract kept both probe
   violations), `FrameRendered` payload (10 TypeErrors). `pytest` 289 passed ×3,
   `ruff` clean, `mypy` clean (58 files), `lint-imports` 1 kept — both envs; parent
-  re-ran pytest in both + lint-imports.
+  re-ran pytest in both + lint-imports. Commit 0d3de8c.
+  Accumulated c5f2c01..0d3de8c → granted → terminal stop
+  `lens_context_budget_exceeded` (no authority created; cannot succeed on retry).
+  Reduced scope per contract: c9b741b..0d3de8c → granted → 1 lens → approved,
+  acknowledged, burned (lineage review-4017ac451bc0bbdb). From here on, review each
+  work-unit commit against the last reviewed boundary.
+- T5a: RED observed (ModuleNotFoundError; DEGRADED indicator 1 failed; FPS/cards/log
+  8 failed). `pytest` 302 passed ×3, `ruff` clean, `mypy` clean (62 files),
+  `lint-imports` 1 kept — both envs; parent re-ran pytest in both + lint-imports.
 
 ## Next step
 
-Review T4b commit, then T5a on `refactor/ca-5a-presentation`.
+Review T5a commit, then T5b on `refactor/ca-5b-wiring`.

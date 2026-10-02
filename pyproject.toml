@@ -57,11 +57,12 @@ root_package = "depot_vision"
 
 # Layering (D-F): application and adapters are independent siblings (the pipe)
 # that may each import ports and domain, but not one another; ports may import
-# only domain. The presentation layer joins above them in Phase 5.
+# only domain. The presentation layer sits above them (D-F).
 [[tool.importlinter.contracts]]
 name = "Layered architecture"
 type = "layers"
 layers = [
+    "depot_vision.presentation",
     "depot_vision.application | depot_vision.adapters",
     "depot_vision.ports",
     "depot_vision.domain",
