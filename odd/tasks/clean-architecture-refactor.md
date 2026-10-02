@@ -59,9 +59,20 @@ Task text and spec references: `openspec/changes/refactor-clean-architecture/tas
 - [x] 1.21 freeze test green
 - [ ] F1 follow-up: `ruff format` pre-existing drift in `tests/domain/test_counting.py`,
   `tests/architecture/test_monolith_frozen.py` (predates T1b; separate style commit)
-- [ ] F2 follow-up (review suggestions): boundary coverage in `test_config.py:82-99`;
-  prove relative-import rejection in `test_dependency_rule.py:58-62`; traversal guard
-  vs absolute paths in `config.py:35-36` (revisit with T2 2.5/2.6)
+- [ ] F2 follow-up (review suggestions): boundary coverage in `test_config.py`;
+  prove relative-import rejection in `test_dependency_rule.py:58-62`.
+  (Item 3, traversal guard vs absolute paths, resolved in T2.)
+- [ ] F3 follow-up (T2 review warnings, non-blocking):
+  - `domain/config.py:107-117` Windows drive-relative / anchored weights names
+    (`C:foo.pt`, `\foo.pt`) can escape the weights dir — tighten guard.
+  - `layered_config_provider.py:64` `is_file()` `OSError`/`PermissionError` escapes
+    untyped — wrap as `InvalidConfiguration`.
+  - `layered_config_provider.py:55-65` explicit `$DEPOT_VISION_CONFIG` pointing to a
+    missing file silently falls through — decide: error vs fallthrough (product call).
+  - `layered_config_provider.py:71-73` INI without `[depot_vision]` section silently
+    yields defaults — at least surface it.
+  - `layered_config_provider.py:27-29` misleading parser name; `pyproject.toml:52-58`
+    stale import-linter comment.
 
 Accepted T1b design choices (design.md left them open): `EventClass` = FRAME/STATE/LOG;
 `SessionFault` and `QueueSaturated` classified LOG (durable lane per D-C); only FRAME
@@ -116,7 +127,14 @@ unknown flags ignored; missing `$DEPOT_VISION_CONFIG` falls through; new CI
   weights resolution (ImportError WEIGHTS_DIR), import-linter (temporary probe import).
   `pytest` 107 passed, `ruff check` clean, `mypy` clean (27 files), `lint-imports`
   1 kept / 0 broken; parent spot check re-ran pytest, mypy, lint-imports. ~560 lines.
+  Commit f6b3f37. RDD: assessed high (shell_source in ci.yml) → granted → 4 lenses →
+  approved, acknowledged, burned (lineage review-55ed1556adb5f5ad). Stop hook then
+  required the accumulated range c5f2c01..f6b3f37 → granted → 4 lenses → approved,
+  acknowledged, burned (lineage review-e73ad0ff504f4f16). Reviewed boundary: f6b3f37.
+  Non-blocking warnings consolidated as F3.
 
 ## Next step
 
-RDD assess on T2 commit, then T3a.
+Awaiting user: F3 before T3a? T3a installs the heavy runtime stack
+(opencv-python, ultralytics → torch, pandas, numpy; multi-GB) into `.venv-linux`.
+T3a branch: `refactor/ca-3a-adapters` (from `refactor/ca-2-ports`).
