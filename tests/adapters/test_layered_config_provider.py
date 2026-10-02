@@ -6,6 +6,7 @@ environment, working directory or home directory.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,8 @@ from depot_vision.adapters.layered_config_provider import LayeredConfigProvider
 from depot_vision.domain.config import AppConfig
 from depot_vision.domain.errors import InvalidConfiguration
 from depot_vision.ports import ConfigProvider
+
+PROVIDER_LOGGER = "depot_vision.adapters.layered_config_provider"
 
 
 @pytest.fixture
@@ -48,6 +51,11 @@ def _provider(
 
 def test_conforms_to_config_provider_port(cwd: Path, home: Path) -> None:
     assert isinstance(_provider(cwd, home), ConfigProvider)
+
+
+def test_argv_is_a_required_argument(cwd: Path, home: Path) -> None:
+    with pytest.raises(TypeError, match="argv"):
+        LayeredConfigProvider(env={}, cwd=cwd, home=home)  # type: ignore[call-arg]
 
 
 def test_no_layers_yields_defaults_and_missing_file_is_not_an_error(cwd: Path, home: Path) -> None:
@@ -127,8 +135,54 @@ class TestFileSearchOrder:
 
         assert config.camera_index == 5
 
+    def test_env_pointing_at_missing_file_logs_a_warning_naming_the_path(
+        self, cwd: Path, home: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        missing = cwd / "nope.ini"
+
+        with caplog.at_level(logging.WARNING, logger=PROVIDER_LOGGER):
+            _provider(cwd, home, env={"DEPOT_VISION_CONFIG": str(missing)}).load()
+
+        assert any(str(missing) in record.getMessage() for record in caplog.records)
+
+    def test_absent_default_locations_log_nothing(
+        self, cwd: Path, home: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger=PROVIDER_LOGGER):
+            _provider(cwd, home).load()
+
+        assert caplog.records == []
+
+    def test_ini_without_section_logs_a_warning_and_yields_defaults(
+        self, cwd: Path, home: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        ini = cwd / "depot_vision.ini"
+        ini.write_text("[other]\ncamera_index = 4\n", encoding="utf-8")
+
+        with caplog.at_level(logging.WARNING, logger=PROVIDER_LOGGER):
+            config = _provider(cwd, home).load()
+
+        assert config == AppConfig()
+        messages = [record.getMessage() for record in caplog.records]
+        assert any(str(ini) in message and "[depot_vision]" in message for message in messages)
+
 
 class TestErrors:
+    def test_unreadable_path_probe_raises_invalid_configuration(
+        self, cwd: Path, home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        target = cwd / "depot_vision.ini"
+
+        def deny(self: Path) -> bool:
+            raise PermissionError(13, "denied", str(self))
+
+        monkeypatch.setattr(Path, "is_file", deny)
+
+        with pytest.raises(InvalidConfiguration, match=str(target)) as excinfo:
+            _provider(cwd, home).load()
+
+        assert isinstance(excinfo.value.__cause__, PermissionError)
+
     def test_coercion_failures_surface_as_invalid_configuration(
         self, cwd: Path, home: Path
     ) -> None:

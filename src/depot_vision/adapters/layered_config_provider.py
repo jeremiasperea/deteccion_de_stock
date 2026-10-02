@@ -1,7 +1,8 @@
 """``ConfigProvider`` that layers CLI > environment > INI > defaults (D-A).
 
 This adapter only *gathers* string layers; all coercion and validation is
-delegated to ``AppConfig.from_mapping``. Argv, environment, working
+delegated to ``AppConfig.from_mapping``. Argv is required (the composition
+root passes ``sys.argv[1:]``); environment, working
 directory and home are injected so tests never touch the real ones.
 """
 
@@ -10,6 +11,7 @@ from __future__ import annotations
 import argparse
 import configparser
 import dataclasses
+import logging
 import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -21,10 +23,11 @@ from depot_vision.domain.errors import InvalidConfiguration
 ENV_PREFIX = "DEPOT_VISION_"
 CONFIG_ENV_VAR = "DEPOT_VISION_CONFIG"
 INI_SECTION = "depot_vision"
+_LOGGER = logging.getLogger(__name__)
 _KEYS: tuple[str, ...] = tuple(field.name for field in dataclasses.fields(AppConfig))
 
 
-class _ArgumentError(argparse.ArgumentParser):
+class _RaisingArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         raise InvalidConfiguration(f"invalid command-line arguments: {message}")
 
@@ -33,12 +36,12 @@ class LayeredConfigProvider:
     def __init__(
         self,
         *,
-        argv: Sequence[str] | None = None,
+        argv: Sequence[str],
         env: Mapping[str, str] | None = None,
         cwd: Path | None = None,
         home: Path | None = None,
     ) -> None:
-        self._argv = tuple(argv) if argv is not None else ()
+        self._argv = tuple(argv)
         self._env = env if env is not None else os.environ
         self._cwd = cwd if cwd is not None else Path.cwd()
         self._home = home if home is not None else Path.home()
@@ -59,9 +62,22 @@ class LayeredConfigProvider:
         paths.append(self._home / ".config" / "depot_vision" / "config.ini")
         return paths
 
+    def _is_file(self, path: Path) -> bool:
+        try:
+            return path.is_file()
+        except OSError as exc:
+            raise InvalidConfiguration(f"cannot access config file {path}: {exc}") from exc
+
     def _ini_layer(self) -> dict[str, str]:
+        explicit = self._env.get(CONFIG_ENV_VAR)
         for path in self._search_paths():
-            if not path.is_file():
+            if not self._is_file(path):
+                if explicit and path == Path(explicit):
+                    _LOGGER.warning(
+                        "%s points to %s, which is not a file; falling back to the next location",
+                        CONFIG_ENV_VAR,
+                        path,
+                    )
                 continue
             parser = configparser.ConfigParser(interpolation=None)
             try:
@@ -69,6 +85,9 @@ class LayeredConfigProvider:
             except (configparser.Error, OSError, UnicodeDecodeError) as exc:
                 raise InvalidConfiguration(f"cannot read config file {path}: {exc}") from exc
             if not parser.has_section(INI_SECTION):
+                _LOGGER.warning(
+                    "config file %s has no [%s] section; using defaults", path, INI_SECTION
+                )
                 return {}
             return {key: value for key, value in parser.items(INI_SECTION) if key in _KEYS}
         return {}
@@ -82,7 +101,7 @@ class LayeredConfigProvider:
         return layer
 
     def _cli_layer(self) -> dict[str, str]:
-        parser = _ArgumentError(add_help=False, allow_abbrev=False)
+        parser = _RaisingArgumentParser(add_help=False, allow_abbrev=False)
         for key in _KEYS:
             parser.add_argument(f"--{key.replace('_', '-')}", dest=key)
         namespace, _unknown = parser.parse_known_args(self._argv)

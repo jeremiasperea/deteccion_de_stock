@@ -51,8 +51,19 @@ def _has_parent_traversal(path: str) -> bool:
     return ".." in re.split(r"[\\/]", path)
 
 
-def _is_absolute(path: str) -> bool:
-    return PurePosixPath(path).is_absolute() or PureWindowsPath(path).is_absolute()
+def _absolute_flavour(path: str) -> PurePath | None:
+    """Return ``path`` as a POSIX or Windows absolute path, or None if it is not absolute."""
+    for flavour in (PurePosixPath, PureWindowsPath):
+        candidate = flavour(path)
+        if candidate.is_absolute():
+            return candidate
+    return None
+
+
+def _is_windows_anchored_relative(path: str) -> bool:
+    """True for ``C:foo`` and ``\\foo``: anchored to a drive or root yet not absolute."""
+    windows = PureWindowsPath(path)
+    return bool(windows.drive or windows.root) and not windows.is_absolute()
 
 
 @dataclass(frozen=True)
@@ -81,10 +92,16 @@ class AppConfig:
         _check_non_empty("model_weights", self.model_weights)
         # An absolute path is an explicit operator override, so only relative
         # names (which resolve under the package weights dir) are traversal-guarded.
-        if not _is_absolute(self.model_weights) and _has_parent_traversal(self.model_weights):
-            raise InvalidConfiguration(
-                f"model_weights must not contain '..' path segments, got {self.model_weights!r}"
-            )
+        if _absolute_flavour(self.model_weights) is None:
+            if _is_windows_anchored_relative(self.model_weights):
+                raise InvalidConfiguration(
+                    "model_weights must be a plain relative name or a full absolute path, "
+                    f"got drive- or root-anchored {self.model_weights!r}"
+                )
+            if _has_parent_traversal(self.model_weights):
+                raise InvalidConfiguration(
+                    f"model_weights must not contain '..' path segments, got {self.model_weights!r}"
+                )
         _check_non_empty("export_dir", self.export_dir)
         if self.camera_index < 0:
             raise InvalidConfiguration(f"camera_index must be >= 0, got {self.camera_index}")
@@ -106,13 +123,8 @@ class AppConfig:
 
     def resolve_model_weights(self, weights_dir: PurePath = WEIGHTS_DIR) -> ModelWeightsLocation:
         """Relative names resolve under ``weights_dir``; absolute paths are overrides."""
-        if _is_absolute(self.model_weights):
-            # Keep the flavour of the configured path (POSIX vs Windows).
-            override: PurePath = (
-                PurePosixPath(self.model_weights)
-                if PurePosixPath(self.model_weights).is_absolute()
-                else PureWindowsPath(self.model_weights)
-            )
+        override = _absolute_flavour(self.model_weights)
+        if override is not None:
             return ModelWeightsLocation(path=override, is_override=True)
         return ModelWeightsLocation(path=weights_dir / self.model_weights, is_override=False)
 

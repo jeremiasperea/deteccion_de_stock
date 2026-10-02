@@ -170,6 +170,18 @@ class TestModelWeightsResolution:
 
         assert config.resolve_model_weights().is_override is True
 
+    @pytest.mark.parametrize(
+        "value", ["C:evil.pt", "c:sub\\evil.pt", "\\evil.pt", "\\sub\\evil.pt"]
+    )
+    def test_windows_anchored_non_absolute_names_are_rejected(self, value: str) -> None:
+        with pytest.raises(InvalidConfiguration, match="model_weights"):
+            AppConfig.from_mapping({"model_weights": value})
+
+    def test_windows_unc_path_is_accepted_as_override(self) -> None:
+        location = AppConfig(model_weights="\\\\server\\share\\w.pt").resolve_model_weights()
+
+        assert location.is_override is True
+
     def test_relative_traversal_is_still_rejected(self) -> None:
         with pytest.raises(InvalidConfiguration, match="model_weights"):
             AppConfig.from_mapping({"model_weights": "../evil.pt"})

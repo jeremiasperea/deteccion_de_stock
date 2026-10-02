@@ -62,7 +62,11 @@ Task text and spec references: `openspec/changes/refactor-clean-architecture/tas
 - [ ] F2 follow-up (review suggestions): boundary coverage in `test_config.py`;
   prove relative-import rejection in `test_dependency_rule.py:58-62`.
   (Item 3, traversal guard vs absolute paths, resolved in T2.)
-- [ ] F3 follow-up (T2 review warnings, non-blocking):
+- [x] F3 follow-up (T2 review warnings, non-blocking) — done on `refactor/ca-2-ports`.
+  Product decision (user, 2026-10-02): missing explicit `$DEPOT_VISION_CONFIG` keeps
+  falling through, now with a logged warning. `argv` is now a required keyword-only
+  parameter (composition root must pass `sys.argv[1:]`); names like `a:b` are rejected
+  as drive-anchored. Original items:
   - `domain/config.py:107-117` Windows drive-relative / anchored weights names
     (`C:foo.pt`, `\foo.pt`) can escape the weights dir — tighten guard.
   - `layered_config_provider.py:64` `is_file()` `OSError`/`PermissionError` escapes
@@ -73,6 +77,7 @@ Task text and spec references: `openspec/changes/refactor-clean-architecture/tas
     yields defaults — at least surface it.
   - `layered_config_provider.py:27-29` misleading parser name; `pyproject.toml:52-58`
     stale import-linter comment.
+  - `layered_config_provider.py:41-42` empty `argv` default silently ignored the CLI.
 
 Accepted T1b design choices (design.md left them open): `EventClass` = FRAME/STATE/LOG;
 `SessionFault` and `QueueSaturated` classified LOG (durable lane per D-C); only FRAME
@@ -132,9 +137,17 @@ unknown flags ignored; missing `$DEPOT_VISION_CONFIG` falls through; new CI
   required the accumulated range c5f2c01..f6b3f37 → granted → 4 lenses → approved,
   acknowledged, burned (lineage review-e73ad0ff504f4f16). Reviewed boundary: f6b3f37.
   Non-blocking warnings consolidated as F3.
+- Doc commit baf47da re-triggered the stop hook on c5f2c01..baf47da → granted → 4 lenses
+  → approved, acknowledged, burned (lineage review-a1073fac6ee2b9f5). Lesson: fold doc
+  updates into work-unit commits; no standalone docs commits after a review.
+- F3 (route: delegated writer; trigger: 5 non-trivial files): RED observed for Windows
+  anchors (DID NOT RAISE), OSError probe (raw PermissionError), env/section warnings
+  (caplog assert), required argv (DID NOT RAISE TypeError). `pytest` 117 passed, `ruff`
+  clean, `mypy` clean (27 files), `lint-imports` 1 kept; parent re-ran pytest +
+  lint-imports. +120/-22.
 
 ## Next step
 
-Awaiting user: F3 before T3a? T3a installs the heavy runtime stack
+RDD assess on F3 commit, then T3a. T3a installs the heavy runtime stack
 (opencv-python, ultralytics → torch, pandas, numpy; multi-GB) into `.venv-linux`.
 T3a branch: `refactor/ca-3a-adapters` (from `refactor/ca-2-ports`).
