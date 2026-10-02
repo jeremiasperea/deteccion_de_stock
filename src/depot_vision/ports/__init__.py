@@ -63,7 +63,7 @@ class ObjectDetector(Protocol):
 
 @runtime_checkable
 class FrameAnnotator(Protocol):
-    def annotate(self, frame: Frame, snapshot: CountSnapshot, overlay: Overlay) -> Frame:
+    def annotate(self, frame: Frame, detections: Sequence[Detection], overlay: Overlay) -> Frame:
         """Transfers ownership: the returned frame is the only valid handle afterwards."""
         ...
 

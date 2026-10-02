@@ -58,7 +58,7 @@ class FakeObjectDetector:
 
 
 class FakeFrameAnnotator:
-    def annotate(self, frame: Frame, snapshot: CountSnapshot, overlay: Overlay) -> Frame:
+    def annotate(self, frame: Frame, detections: Sequence[Detection], overlay: Overlay) -> Frame:
         return frame
 
 

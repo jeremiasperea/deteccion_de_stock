@@ -142,3 +142,20 @@ def test_close_swallows_release_errors_and_still_closes() -> None:
     source.open()
     source.close()
     assert not source.is_open
+
+
+@pytest.mark.parametrize("failing", ["set", "isOpened"])
+def test_open_releases_capture_when_configuration_raises(
+    failing: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    capture = FakeCapture()
+
+    def boom(*args: object) -> bool:
+        raise RuntimeError("driver crashed")
+
+    monkeypatch.setattr(capture, failing, boom)
+    source, _ = _source(capture)
+    with pytest.raises(CameraUnavailable):
+        source.open()
+    assert not source.is_open
+    assert capture.released == 1

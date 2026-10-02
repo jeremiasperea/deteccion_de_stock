@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from depot_vision.domain.detections import Detection
 
@@ -51,9 +52,14 @@ TARGET_CLASSES: Mapping[str, TargetClass] = {
 
 @dataclass(frozen=True)
 class CountSnapshot:
-    """Per-class detection counts for one processed frame."""
+    """Per-class detection counts for one processed frame.
+
+    ``timestamp`` is the moment the frame was counted; ``CountingPolicy`` leaves
+    it ``None`` and the capture worker stamps it from the injected ``Clock``.
+    """
 
     counts: Mapping[TargetClass, int]
+    timestamp: datetime | None = None
 
     def count_for(self, target_class: TargetClass) -> int:
         return self.counts.get(target_class, 0)
@@ -65,16 +71,19 @@ class CountingPolicy:
 
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
 
+    def select(self, detections: Sequence[Detection]) -> tuple[Detection, ...]:
+        """Detections that are a target class with confidence above the threshold."""
+        # Strictly-greater comparison, matching the monolith's `conf > 0.4`
+        # (app.py:130): a detection exactly at the threshold is discarded.
+        # PRESERVE 2 pins observable behavior, not just the default value.
+        return tuple(
+            d
+            for d in detections
+            if d.class_name in TARGET_CLASSES and d.confidence > self.confidence_threshold
+        )
+
     def apply(self, detections: Sequence[Detection]) -> CountSnapshot:
         counts: dict[TargetClass, int] = {tc: 0 for tc in TARGET_CLASSES.values()}
-        for detection in detections:
-            target_class = TARGET_CLASSES.get(detection.class_name)
-            if target_class is None:
-                continue
-            # Strictly-greater comparison, matching the monolith's `conf > 0.4`
-            # (app.py:130): a detection exactly at the threshold is discarded.
-            # PRESERVE 2 pins observable behavior, not just the default value.
-            if detection.confidence <= self.confidence_threshold:
-                continue
-            counts[target_class] += 1
+        for detection in self.select(detections):
+            counts[TARGET_CLASSES[detection.class_name]] += 1
         return CountSnapshot(counts=counts)

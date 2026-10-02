@@ -51,10 +51,16 @@ class OpenCVFrameSource:
             return
         try:
             capture = self._factory(self._config.camera_index)
+        except Exception as exc:
+            raise CameraUnavailable(
+                f"could not open camera {self._config.camera_index}: {exc}"
+            ) from exc
+        try:
             capture.set(cv2.CAP_PROP_FRAME_WIDTH, self._config.frame_width)
             capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self._config.frame_height)
             opened = capture.isOpened()
         except Exception as exc:
+            _release_quietly(capture)
             raise CameraUnavailable(
                 f"could not open camera {self._config.camera_index}: {exc}"
             ) from exc

@@ -36,7 +36,8 @@ files = ["src", "tests", "scripts"]
 
 [[tool.mypy.overrides]]
 # CI typechecks without ultralytics (heavy); the adapter imports it lazily.
-module = ["ultralytics"]
+# pandas ships no inline types; stubs are not worth an extra dependency here.
+module = ["ultralytics", "pandas"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

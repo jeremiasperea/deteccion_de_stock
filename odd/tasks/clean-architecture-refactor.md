@@ -39,6 +39,7 @@ references; this document is the live checklist (ODD now drives execution).
 - Branches: one per slice. T1b: `refactor/ca-1b-domain` (from `main` @ c5f2c01).
   T2 + F3: `refactor/ca-2-ports` (from `refactor/ca-1b-domain`).
   T3a: `refactor/ca-3a-adapters` (from `refactor/ca-2-ports`).
+  T3b: `refactor/ca-3b-adapters` (from `refactor/ca-3a-adapters`).
 - Strategy: `auto-chain` (inherited). Chain strategy: `stacked-to-main` (user choice
   2026-10-02): each PR targets the previous slice branch; merged to `main` in order.
 - Forecast remaining: ~4000 authored lines.
@@ -110,8 +111,22 @@ CI: new `requirements-ci.txt` (opencv-python-headless, numpy, flet) for `test` a
 `type: ignore` in the YOLO factory. Fixed pre-existing CI break: `typecheck` lacked
 flet for `scripts/check_flet_capability.py`.
 
-### T3b — Adapters: annotator, encoder, repository, exporter
-- [ ] 3.9–3.19
+### T3b — Adapters: annotator, encoder, repository, exporter (route: delegated writer)
+- [x] F6 capture leak in `OpenCVFrameSource.open()` when `set()`/`isOpened()` raises
+- [x] 3.9–3.19
+
+Design correction (parent, T3b): D-B's `FrameAnnotator.annotate(frame, snapshot,
+overlay)` could not draw boxes (`CountSnapshot` has counts only). Port widened to
+`annotate(frame, detections: Sequence[Detection], overlay)`; domain gained
+`CountingPolicy.select()` (single home of the class + strict `> threshold` rule; `apply`
+counts `select`'s output). Rejected alternative: adapter-only `draw_detections`
+(application would depend on a concrete adapter).
+Accepted T3b choices: optional `CountSnapshot.timestamp` stamped by the worker (T4b:
+`dataclasses.replace(snapshot, timestamp=clock.now())`), exporter falls back to export
+time; repository "worker live" is an injected predicate; encoder test compares decoded
+pixels with tolerance (libjpeg builds differ), annotator uses exact pixel goldens
+generated from verbatim `app.py` drawing code; `requirements-ci.txt` + pandas, mypy
+`ignore_missing_imports` for pandas.
 
 ### T4a — SessionController + ordered shutdown
 - [ ] 4.1–4.7
@@ -167,8 +182,15 @@ flet for `scripts/check_flet_capability.py`.
   each adapter (ModuleNotFoundError) and for naive local `now()` (tzinfo assert).
   `pytest` 140 passed, `ruff check` clean, `mypy` clean (35 files), `lint-imports`
   1 kept — in `.venv-linux` AND a CI-like venv (dev + ci requirements only).
-  ~560 authored lines.
+  ~560 authored lines. Commit 3af0f39. Accumulated c5f2c01..3af0f39 → granted →
+  4 lenses → approved, acknowledged, burned (lineage review-6b4a2af3dceeaf41);
+  warning on capture leak became F6 (fixed in T3b).
+- T3b: RED observed for F6 (`capture.released` 0 == 1), each new adapter
+  (ModuleNotFoundError), snapshot timestamp (AttributeError), `select` (AttributeError),
+  widened port (mypy arg-type), annotator rewiring (10 golden failures), ExportFailed
+  (temporary bare raise). `pytest` 183 passed, `ruff` clean, `mypy` clean (45 files),
+  `lint-imports` 1 kept — both `.venv-linux` and CI-like venv; parent re-ran pytest + mypy.
 
 ## Next step
 
-RDD assess on T3a commit, then T3b on `refactor/ca-3b-adapters`.
+Review T3b commit, then T4a on `refactor/ca-4a-controller`.
