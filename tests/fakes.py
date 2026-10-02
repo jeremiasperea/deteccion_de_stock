@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from depot_vision.domain.counting import CountSnapshot
 from depot_vision.domain.events import AppEvent, SessionStateChanged
@@ -16,7 +16,7 @@ class FakeClock:
 
     def __init__(self) -> None:
         self._monotonic = 0.0
-        self._start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        self._start = datetime(2026, 1, 1)
         self.sleeps: list[float] = []
 
     def now(self) -> datetime:

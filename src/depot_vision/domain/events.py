@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, auto
 
+from depot_vision.domain.counting import CountSnapshot
 from depot_vision.domain.errors import DepotVisionError
 from depot_vision.domain.frames import EncodedImage
 from depot_vision.domain.session import SessionState
@@ -39,7 +40,16 @@ class AppEvent:
 
 @dataclass(frozen=True)
 class FrameRendered(AppEvent):
+    """One processed frame with the stats it was computed from.
+
+    Image, counts, FPS and frame number travel together so a coalesced (dropped)
+    frame never leaves stale stats on screen.
+    """
+
     image: EncodedImage
+    snapshot: CountSnapshot
+    fps: float
+    frame_number: int
 
     @property
     def event_class(self) -> EventClass:

@@ -61,3 +61,7 @@ def test_fake_clock_drives_backoff_schedule_without_real_delay(fake_clock: FakeC
     assert attempts == 5
     assert fake_clock.sleeps == [0.5, 1.0, 2.0, 2.0]
     assert fake_clock.monotonic() == 5.5
+
+
+def test_fake_clock_now_is_naive_like_system_clock(fake_clock: FakeClock) -> None:
+    assert fake_clock.now().tzinfo is None

@@ -19,6 +19,7 @@ import asyncio
 import threading
 from collections.abc import Callable
 
+from depot_vision.application.faults import as_fault
 from depot_vision.application.worker import WorkerFactory, WorkerHandle
 from depot_vision.domain.errors import DepotVisionError, InvalidTransition
 from depot_vision.domain.events import SessionFault, SessionStateChanged, ShutdownTimedOut
@@ -78,8 +79,15 @@ class SessionController:
                 return False
             self.clear_history()  # before the worker thread exists (FT7)
             self._move(S.STARTING)
-            self._worker = self._worker_factory()
-            self._worker.start()
+            try:
+                worker = self._worker_factory()
+                self._worker = worker
+                worker.start()
+            except Exception as exc:
+                self._worker = None  # never leave a half-started handle behind
+                self._bus.publish(SessionFault(error=as_fault(exc)))
+                self._move(S.ERROR)
+                return False
             return True
 
     def pause(self) -> bool:
@@ -114,28 +122,56 @@ class SessionController:
             return True
 
     async def stop(self) -> bool:
-        """Signal, drain, join with timeout, then release (or orphan on timeout)."""
+        """Signal, drain, join with timeout, then release (or orphan on timeout).
+
+        Collaborator failures never wedge the controller in STOPPING: they are
+        published as ``SessionFault`` events (never re-raised, like ``start``)
+        and the session ends in ERROR instead of IDLE.
+        """
         if not self.begin_stop():
             return False
-        self._drain()
         handles = self._live_handles()
-        loop = asyncio.get_running_loop()
-        results = [
-            await loop.run_in_executor(None, handle.join, self._stop_timeout_s)
-            for handle in handles
-        ]
-        with self._lock:
-            if all(results):
-                self._orphans.clear()
-                self._worker = None
-                self._source.close()
-                self._move(S.IDLE)
-            else:
-                self._orphans = [h for h, done in zip(handles, results, strict=True) if not done]
-                self._worker = None
-                self._bus.publish(ShutdownTimedOut(timeout_s=self._stop_timeout_s))
-                self._move(S.ERROR)
+        exited: list[WorkerHandle] = []
+        errors: list[Exception] = []
+        timed_out = False
+        try:
+            try:
+                self._drain()
+            except Exception as exc:
+                errors.append(exc)  # still join: the stop signal is already sent
+            loop = asyncio.get_running_loop()
+            for handle in handles:
+                try:
+                    if await loop.run_in_executor(None, handle.join, self._stop_timeout_s):
+                        exited.append(handle)
+                    else:
+                        timed_out = True
+                except Exception as exc:
+                    errors.append(exc)  # outcome unknown: the handle stays an orphan
+        finally:
+            self._finish_stop(handles, exited, errors, timed_out)
         return True
+
+    def _finish_stop(
+        self,
+        handles: list[WorkerHandle],
+        exited: list[WorkerHandle],
+        errors: list[Exception],
+        timed_out: bool,
+    ) -> None:
+        with self._lock:
+            self._orphans = [h for h in handles if h not in exited]
+            self._worker = None
+            if not self._orphans:
+                try:
+                    self._source.close()
+                except Exception as exc:
+                    errors.append(exc)
+            if timed_out:
+                self._bus.publish(ShutdownTimedOut(timeout_s=self._stop_timeout_s))
+            for error in errors:
+                self._bus.publish(SessionFault(error=as_fault(error)))
+            self._move(S.ERROR if self._orphans or errors else S.IDLE)
 
     # -- worker-thread notifications --------------------------------------
 

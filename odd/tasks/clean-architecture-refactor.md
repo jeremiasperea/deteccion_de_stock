@@ -41,6 +41,7 @@ references; this document is the live checklist (ODD now drives execution).
   T3a: `refactor/ca-3a-adapters` (from `refactor/ca-2-ports`).
   T3b: `refactor/ca-3b-adapters` (from `refactor/ca-3a-adapters`).
   T4a: `refactor/ca-4a-controller` (from `refactor/ca-3b-adapters`).
+  T4b: `refactor/ca-4b-loop` (from `refactor/ca-4a-controller`).
 - Strategy: `auto-chain` (inherited). Chain strategy: `stacked-to-main` (user choice
   2026-10-02): each PR targets the previous slice branch; merged to `main` in order.
 - Forecast remaining: ~4000 authored lines.
@@ -83,7 +84,7 @@ Task text and spec references: `openspec/changes/refactor-clean-architecture/tas
   - `layered_config_provider.py:41-42` empty `argv` default silently ignored the CLI.
 - [ ] F4 follow-up (F3 review warnings, non-blocking): `from_mapping` key duplication
   (`config.py:139-160`); INI inline comments not stripped (`layered_config_provider.py:82`).
-- [ ] F5 follow-up: extend import-linter to adapters (planned in 4.12).
+- [x] F5 follow-up: extend import-linter to adapters (done in 4.12).
 
 Accepted T1b design choices (design.md left them open): `EventClass` = FRAME/STATE/LOG;
 `SessionFault` and `QueueSaturated` classified LOG (durable lane per D-C); only FRAME
@@ -147,8 +148,24 @@ via a lambda/holder; `stop_timeout_s` required kw-arg. Threads injectable throug
 TDD note: `ThreadWorkerHandle` was written before its test (deviation from strict TDD,
 reported by the writer); its test is event-driven, no sleeps.
 
-### T4b — Capture loop + bounded event bus
-- [ ] 4.8–4.13
+### T4b — Capture loop + bounded event bus (route: delegated writer)
+- [x] F8 (T4a review warnings): `start()` no longer sticks in STARTING and `stop()` no
+  longer wedges in STOPPING when collaborators raise (→ ERROR + `SessionFault`, never
+  raises); `FakeClock.now()` naive like `SystemClock`.
+- [x] 4.8–4.13 (closes F5: import-linter contract `application | adapters > ports >
+  domain`, probes in both directions now break it)
+
+Accepted T4b choices: commands report operational failures via `SessionFault` + return
+value, never exceptions; a join that raised leaves the worker orphaned; exhaustion is
+checked before sleeping (8 read failures sleep 15.75 s, not D-E's 19.75 s — no useless
+final wait); inference exhaustion faults with `InferenceFailed` (3 attempts), model-load
+failure faults immediately; separate read/inference counters; `QueueOverflow` error
+added; bus notices re-arm on every `drain()`; retry sleeps not interruptible (worst case
+4 s cap < 5 s default `stop_timeout_s`); no `CaptureLoopExited` event.
+Design correction (parent, T4b): `FrameRendered` carries `snapshot`, `fps`,
+`frame_number` with the image (one coalesced FRAME event feeds image, stats cards and
+FPS text, as the monolith's single `_update_ui` closure).
+T5b must: forward the bus's `SessionFault(QueueOverflow)` to `controller.notify_fault`.
 
 ### T5a — Presentation: renderer, theme, DEGRADED indicator
 - [ ] 5.1–5.7
@@ -214,7 +231,14 @@ reported by the writer); its test is event-driven, no sleeps.
   (ImportError). `pytest` 253 passed ×4 runs (no flakiness), `ruff` clean, `mypy` clean
   (52 files), `lint-imports` 1 kept — both envs; parent re-ran full suite in both.
   `application/` imports only domain, ports and stdlib (grep-verified; contract in 4.12).
+  Commit c9b741b. Accumulated c5f2c01..c9b741b → granted → 4 lenses → approved,
+  acknowledged, burned (lineage review-7d65740fc8de9455). Warnings became F8.
+- T4b: RED observed for F8a/b (raw exceptions escaped, 5 tests), F8c (tzinfo assert),
+  capture loop + bus (ModuleNotFoundError), import-linter (old contract kept both probe
+  violations), `FrameRendered` payload (10 TypeErrors). `pytest` 289 passed ×3,
+  `ruff` clean, `mypy` clean (58 files), `lint-imports` 1 kept — both envs; parent
+  re-ran pytest in both + lint-imports.
 
 ## Next step
 
-Review T4a commit, then T4b on `refactor/ca-4b-loop`.
+Review T4b commit, then T5a on `refactor/ca-5a-presentation`.

@@ -10,6 +10,7 @@ import dataclasses
 
 import pytest
 
+from depot_vision.domain.counting import CountSnapshot
 from depot_vision.domain.errors import CameraUnavailable
 from depot_vision.domain.events import (
     AppEvent,
@@ -28,7 +29,12 @@ from depot_vision.domain.session import SessionState
 
 def _one_of_each() -> list[AppEvent]:
     return [
-        FrameRendered(image=EncodedImage(data=b"x", media_type="image/jpeg")),
+        FrameRendered(
+            image=EncodedImage(data=b"x", media_type="image/jpeg"),
+            snapshot=CountSnapshot(counts={}),
+            fps=30.0,
+            frame_number=1,
+        ),
         SessionStateChanged(state=SessionState.RUNNING),
         LogEmitted(message="hello"),
         DetectionLogged(message="2 x person"),
@@ -74,3 +80,17 @@ class TestHierarchy:
         fault = SessionFault(error=CameraUnavailable("gone"))
         assert isinstance(fault.error, CameraUnavailable)
         assert SessionStateChanged(state=SessionState.DEGRADED).state is SessionState.DEGRADED
+
+
+class TestFrameRenderedPayload:
+    def test_carries_image_stats_fps_and_frame_number_together(self) -> None:
+        snapshot = CountSnapshot(counts={})
+        event = FrameRendered(
+            image=EncodedImage(data=b"x", media_type="image/jpeg"),
+            snapshot=snapshot,
+            fps=12.5,
+            frame_number=7,
+        )
+
+        assert (event.snapshot, event.fps, event.frame_number) == (snapshot, 12.5, 7)
+        assert event.event_class is EventClass.FRAME

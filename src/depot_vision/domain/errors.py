@@ -37,3 +37,7 @@ class InvalidConfiguration(DepotVisionError):
 
 class InvalidTransition(DepotVisionError):
     """Raised on an illegal session or history state transition."""
+
+
+class QueueOverflow(DepotVisionError):
+    """Raised (as a published fault) when the durable event lane reaches its hard ceiling."""
