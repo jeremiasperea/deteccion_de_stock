@@ -172,9 +172,9 @@ def test_log_lane_events_render_with_colors() -> None:
     texts = [c for c in targets.detect_log.controls if isinstance(c, ft.Text)]
     # newest first
     assert [t.color for t in texts] == ["#ffaa00", "#ffaa00", "#ff4444", "#aaaacc"]
-    assert "5" in texts[0].value
-    assert "500" in texts[1].value
-    assert "no camera" in texts[2].value
+    assert texts[0].value == "[13:05:09.123] ⚠️ El hilo no finalizó en 5s y quedó huérfano"
+    assert texts[1].value == "[13:05:09.123] ⚠️ Cola de eventos saturada (profundidad 500)"
+    assert texts[2].value == "[13:05:09.123] 💥 CameraUnavailable: no camera"
     assert texts[3].value == "[13:05:09.123] hola"
 
 
@@ -204,3 +204,21 @@ def test_idle_resets_fps_text_and_shows_stopped_placeholder() -> None:
     renderer.render(SessionStateChanged(SessionState.IDLE))
     assert targets.fps_text.value == "⚡ -- FPS"
     assert targets.image.src == "https://placehold.co/640x480/0d0d1a/333366?text=Detenido"
+
+
+def test_error_resets_fps_text_and_shows_stopped_placeholder() -> None:
+    targets = make_targets()
+    renderer = make_renderer(targets)
+    renderer.render(frame())
+    renderer.render(SessionStateChanged(SessionState.ERROR))
+    assert targets.fps_text.value == "⚡ -- FPS"
+    assert targets.image.src == "https://placehold.co/640x480/0d0d1a/333366?text=Detenido"
+
+
+def test_running_does_not_reset_fps_text_or_image() -> None:
+    targets = make_targets()
+    renderer = make_renderer(targets)
+    renderer.render(frame(data=b"pixels", number=3))
+    renderer.render(SessionStateChanged(SessionState.RUNNING))
+    assert targets.image.src == b"pixels"
+    assert targets.fps_text.value.endswith("Frame #3")

@@ -41,3 +41,7 @@ class InvalidTransition(DepotVisionError):
 
 class QueueOverflow(DepotVisionError):
     """Raised (as a published fault) when the durable event lane reaches its hard ceiling."""
+
+
+class UiUpdateFailed(DepotVisionError):
+    """Raised by the presentation layer when ``page.update()`` fails."""

@@ -16,9 +16,8 @@ pythonpath = ["src", "."]
 target-version = "py310"
 line-length = 100
 src = ["src", "tests", "scripts"]
-# app.py is the frozen pre-refactor monolith (tests/architecture/test_monolith_frozen.py
-# pins its sha256). It must stay byte-identical until Phase 5b, so it is out of lint
-# scope entirely rather than "clean" by accident.
+# app.py still carries the dead pre-refactor monolith scaffolding (AppState,
+# detection_worker) below its new entrypoint; Phase 6 deletes it and drops this exclude.
 extend-exclude = ["app.py"]
 
 [tool.ruff.lint]

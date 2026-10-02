@@ -43,6 +43,7 @@ references; this document is the live checklist (ODD now drives execution).
   T4a: `refactor/ca-4a-controller` (from `refactor/ca-3b-adapters`).
   T4b: `refactor/ca-4b-loop` (from `refactor/ca-4a-controller`).
   T5a: `refactor/ca-5a-presentation` (from `refactor/ca-4b-loop`).
+  T5b: `refactor/ca-5b-wiring` (from `refactor/ca-5a-presentation`).
 - Strategy: `auto-chain` (inherited). Chain strategy: `stacked-to-main` (user choice
   2026-10-02): each PR targets the previous slice branch; merged to `main` in order.
 - Forecast remaining: ~4000 authored lines.
@@ -184,8 +185,32 @@ Pending user confirmation (new UI copy, no monolith equivalent): `SessionFault` 
 Check at gate G.1: button hover bgcolor uses `ControlState.DEFAULT`/`HOVERED` keys
 instead of the monolith's raw `""`/`"hovered"`.
 
-### T5b — View wiring, drain loop, app.py rewiring
-- [ ] 5.8–5.15
+### T5b — View wiring, drain loop, app.py rewiring (route: delegated writer)
+- [x] F9 (T5a review warnings): ERROR reset now proven (mutation: removing ERROR from
+  reset states fails a test); exact-string asserts for ShutdownTimedOut/QueueSaturated/
+  SessionFault log lines.
+- [x] 5.8–5.15 (`test_monolith_frozen.py` deleted; `app.py` delegates to
+  `flet_app.run()` through a `sys.path` shim; dead monolith code stays until T6)
+
+Accepted T5b choices: single drain loop started once at mount; `page.update()` failure
+→ logged + `UiUpdateFailed` (new error) published as `SessionFault`, gives up after 5
+consecutive failures; Start disabled while STOPPING; Start from ERROR first reaps via
+`stop()`; bus `QueueOverflow` forwarded to `notify_fault` then `controller.stop()`
+scheduled via `page.run_task`; buttons are `ft.Button` with `content` label (Flet
+0.85.3 `ElevatedButton.text` assignment did not update the label — monolith's Pause
+label toggle was likely broken).
+T6 implications: `app.py` needs the `sys.path` shim (package not installed) unless T6
+adds a build-system / editable install — T6.1's "only `from … import run; run()`"
+wording must account for it. `extend-exclude = ["app.py"]` stays until T6.
+Known gaps (not fixed): `target_fps` config unused (loop keeps fixed 0.03 s pacing);
+monolith worker log lines ("Hilo de detección iniciado", "Cargando modelo", …) no longer
+emitted; window close during a session does not stop it (same as monolith).
+Weights: default `yolov8n.pt` resolves to `src/depot_vision/weights/yolov8n.pt` (dir
+absent). Verified in ultralytics source (`utils/downloads.py` `attempt_download_asset` +
+`safe_download` mkdir parents): missing asset is downloaded to that path; `*.pt` is
+gitignored. Not exercised by a real download — confirm at G.1.
+Pending user confirmation (new UI copy): `❌ No se pudo exportar: {error}`;
+`⏳ Iniciando...` now default log color (monolith `#ffcc44`).
 
 ### G — Human validation gate (user, real camera) — blocks T6
 - [ ] G.1
@@ -260,7 +285,17 @@ instead of the monolith's raw `""`/`"hovered"`.
 - T5a: RED observed (ModuleNotFoundError; DEGRADED indicator 1 failed; FPS/cards/log
   8 failed). `pytest` 302 passed ×3, `ruff` clean, `mypy` clean (62 files),
   `lint-imports` 1 kept — both envs; parent re-ran pytest in both + lint-imports.
+  Commit b16dbd4. Per-commit 0d3de8c..b16dbd4 → granted → 1 lens → approved,
+  acknowledged, burned (lineage review-00cef51f1635871e); warnings became F9. Stop hook
+  re-offered accumulated c5f2c01..b16dbd4 → granted → terminal
+  `lens_context_budget_exceeded` again (exits: reduce scope — being done per commit —
+  or user-chosen clone disable).
+- T5b: RED observed for F9 (mutation tests), view and flet_app (ModuleNotFoundError).
+  `pytest` 335 passed ×3, `ruff` clean, `mypy` clean (66 files), `lint-imports` 1 kept
+  — both envs; import smoke opens no window; parent re-ran pytest in both, mypy,
+  lint-imports.
 
 ## Next step
 
-Review T5a commit, then T5b on `refactor/ca-5b-wiring`.
+Review T5b commit, then gate G.1 (user runs `python app.py` with the real camera on
+Windows). T6 blocked until the user confirms G.1.
