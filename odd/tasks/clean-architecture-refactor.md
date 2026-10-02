@@ -37,6 +37,7 @@ references; this document is the live checklist (ODD now drives execution).
 ## Delivery
 
 - Branches: one per slice. T1b: `refactor/ca-1b-domain` (from `main` @ c5f2c01).
+  T2: `refactor/ca-2-ports` (from `refactor/ca-1b-domain`).
 - Strategy: `auto-chain` (inherited). Chain strategy: `stacked-to-main` (user choice
   2026-10-02): each PR targets the previous slice branch; merged to `main` in order.
 - Forecast remaining: ~4000 authored lines.
@@ -58,6 +59,9 @@ Task text and spec references: `openspec/changes/refactor-clean-architecture/tas
 - [x] 1.21 freeze test green
 - [ ] F1 follow-up: `ruff format` pre-existing drift in `tests/domain/test_counting.py`,
   `tests/architecture/test_monolith_frozen.py` (predates T1b; separate style commit)
+- [ ] F2 follow-up (review suggestions): boundary coverage in `test_config.py:82-99`;
+  prove relative-import rejection in `test_dependency_rule.py:58-62`; traversal guard
+  vs absolute paths in `config.py:35-36` (revisit with T2 2.5/2.6)
 
 Accepted T1b design choices (design.md left them open): `EventClass` = FRAME/STATE/LOG;
 `SessionFault` and `QueueSaturated` classified LOG (durable lane per D-C); only FRAME
@@ -98,8 +102,11 @@ is droppable. Config validation runs in `__post_init__`; package-relative weight
 - T1b (route: delegated writer; trigger: 7 new non-trivial files): RED observed for
   config/events/frames (ModuleNotFoundError) and dependency rule (temporary numpy probe).
   `pytest` 70 passed, `ruff check` clean, `mypy` clean (22 files); parent spot check
-  re-ran pytest + mypy. ~545 authored lines.
+  re-ran pytest + mypy. ~545 authored lines. Commit ef91954.
+  RDD: assessed medium (slice_budget_reached) → consent granted → 1 lens (reliability)
+  → approved, acknowledged, authority burned (lineage review-67e9229342a34cbf).
+  Reviewed boundary advances to ef91954. Non-blocking suggestions logged as F2.
 
 ## Next step
 
-T1b (delegated writer).
+T2 (delegated writer) on `refactor/ca-2-ports`.
