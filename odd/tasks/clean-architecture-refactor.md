@@ -218,7 +218,14 @@ Pending user confirmation (new UI copy): `❌ No se pudo exportar: {error}`;
 `⏳ Iniciando...` now default log color (monolith `#ffcc44`).
 
 ### G — Human validation gate (user, real camera) — blocks T6
-- [ ] G.1
+- [ ] G.1 — attempt 1 (2026-10-03): launched on Windows (global Python 3.13, flet
+  0.85.1, opencv 4.13.0, ultralytics 8.4.51, torch 2.11.0+cpu) with cwd `C:\Users\odinj`
+  (a `\\wsl.localhost` cwd breaks the ultralytics import via `/etc/os-release`). Camera
+  verified readable (640x480). Weights auto-downloaded to `src/depot_vision/weights/`.
+  App exited 0 with no logged errors. **User reports it did not go well — failures not
+  yet described; diagnosis pending.**
+- [ ] F11 follow-up (F10 review warning): orderly-teardown branch of the drain-loop
+  `finally` is untested (`view.py:166-167`).
 
 ### T6 — Strangler cleanup
 - [ ] 6.1–6.4
@@ -308,5 +315,6 @@ Pending user confirmation (new UI copy): `❌ No se pudo exportar: {error}`;
 
 ## Next step
 
-Review T5b commit, then gate G.1 (user runs `python app.py` with the real camera on
-Windows). T6 blocked until the user confirms G.1.
+Diagnose G.1 attempt 1 failures with the user, fix them, re-run G.1. T6 blocked until
+G.1 passes. F10 reviewed per commit (lineage review-397162127bcb4ee0, approved, burned;
+accumulated c5f2c01..da0d678 ended in terminal `lens_context_budget_exceeded`).
