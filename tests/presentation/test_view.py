@@ -224,6 +224,98 @@ def test_drain_loop_recovers_when_update_succeeds_again() -> None:
     asyncio.run(scenario())
 
 
+# -- give-up / bad-event resilience (F10) ----------------------------------
+
+
+def test_drain_loop_give_up_stops_the_session_and_releases_the_worker() -> None:
+    h = Harness()
+    page = h.mount()
+    make_running(h)
+    page.update_error = RuntimeError("gone")
+    h.bus.publish(LogEmitted("x"))
+    with pytest.raises(UiUpdateFailed):
+        asyncio.run(h.view.run_drain_loop())
+    assert h.workers[0].stop_requested == 1
+    assert h.controller.state is not SessionState.RUNNING
+
+
+def test_drain_loop_unexpected_exception_stops_the_session() -> None:
+    h = Harness()
+    h.mount()
+    make_running(h)
+
+    def boom() -> list[object]:
+        raise RuntimeError("bus broke")
+
+    h.bus.drain = boom  # type: ignore[method-assign,assignment]
+    with pytest.raises(RuntimeError):
+        asyncio.run(h.view.run_drain_loop())
+    assert h.workers[0].stop_requested == 1
+
+
+def test_drain_loop_survives_a_failing_stop_during_give_up(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    h = Harness()
+    page = h.mount()
+    page.update_error = RuntimeError("gone")
+    h.bus.publish(LogEmitted("x"))
+
+    async def bad_stop() -> bool:
+        raise RuntimeError("stop broke")
+
+    h.controller.stop = bad_stop  # type: ignore[method-assign]
+    with caplog.at_level(logging.ERROR), pytest.raises(UiUpdateFailed):
+        asyncio.run(h.view.run_drain_loop())
+    assert any("stopping the session" in r.getMessage() for r in caplog.records)
+
+
+def test_one_bad_event_is_isolated_faulted_and_the_batch_continues(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    h = Harness()
+    page = h.mount()
+    real_render = h.view._renderer.render
+
+    def flaky(event: object) -> None:
+        if isinstance(event, LogEmitted) and event.message == "bad":
+            raise ValueError("render broke")
+        real_render(event)  # type: ignore[arg-type]
+
+    h.view._renderer.render = flaky  # type: ignore[method-assign]
+    h.bus.publish(LogEmitted("bad"))
+    h.bus.publish(LogEmitted("good"))
+    with caplog.at_level(logging.ERROR):
+        h.pump()  # must not raise
+    assert page.updates == 1
+    assert len(h.view.detect_log.controls) == 1  # "good" rendered
+    assert any(r.exc_info for r in caplog.records)
+    faults = [e for e in h.bus.events if isinstance(e, SessionFault)]
+    assert len(faults) == 1 and isinstance(faults[0].error, UiUpdateFailed)
+
+
+def test_failing_fault_rendering_does_not_republish_endlessly() -> None:
+    h = Harness()
+    h.mount()
+
+    def always_fails(event: object) -> None:
+        raise ValueError("render broke")
+
+    h.view._renderer.render = always_fails  # type: ignore[method-assign]
+    h.bus.publish(LogEmitted("x"))
+    published: list[object] = []
+    real_publish = h.bus.publish
+
+    def spy(event: object) -> None:
+        published.append(event)
+        real_publish(event)  # type: ignore[arg-type]
+
+    h.bus.publish = spy  # type: ignore[method-assign]
+    for _ in range(5):
+        h.pump()
+    assert len([e for e in published if isinstance(e, SessionFault)]) == 1
+
+
 # -- QueueOverflow forwarding (T5b obligation) -------------------------------
 
 

@@ -158,6 +158,17 @@ class DepotVisionView:
         except Exception:
             logger.exception("UI drain loop terminated unexpectedly")
             raise
+        finally:
+            await self._stop_session_on_loop_exit()
+
+    async def _stop_session_on_loop_exit(self) -> None:
+        """Never orphan the capture worker when the loop dies (give-up or crash)."""
+        if self._ui_stop.is_set():
+            return  # orderly page teardown: not a failure exit
+        try:
+            await self._controller.stop()
+        except Exception:
+            logger.exception("stopping the session after the drain loop ended failed")
 
     def pump(self) -> None:
         """Drain the bus, render the batch, then one ``page.update()``."""
@@ -165,8 +176,20 @@ class DepotVisionView:
         if not events:
             return
         for event in events:
-            self._handle(event)
+            try:
+                self._handle(event)
+            except Exception as exc:
+                self._on_event_failure(event, exc)
         self._update_page()
+
+    def _on_event_failure(self, event: AppEvent, exc: Exception) -> None:
+        """Isolate one bad event: log it, report a typed fault, keep draining."""
+        logger.exception("handling %s failed", type(event).__name__)
+        if isinstance(event, SessionFault):
+            return  # a fault that cannot be rendered must not republish itself forever
+        fault = UiUpdateFailed(f"handling {type(event).__name__} failed: {exc}")
+        fault.__cause__ = exc
+        self._bus.publish(SessionFault(error=fault))
 
     def _handle(self, event: AppEvent) -> None:
         self._renderer.render(event)

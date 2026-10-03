@@ -209,6 +209,11 @@ Weights: default `yolov8n.pt` resolves to `src/depot_vision/weights/yolov8n.pt` 
 absent). Verified in ultralytics source (`utils/downloads.py` `attempt_download_asset` +
 `safe_download` mkdir parents): missing asset is downloaded to that path; `*.pt` is
 gitignored. Not exercised by a real download — confirm at G.1.
+- [x] F10 (T5b review warnings): drain loop `finally` awaits `controller.stop()` on
+  give-up or crash (skipped on orderly teardown; a failing stop is logged), so the
+  worker is never left running without a UI; per-event `_handle` failures are isolated
+  (logged, published as `SessionFault(UiUpdateFailed)`, batch continues); a failing
+  `SessionFault` render is never republished (no feedback loop).
 Pending user confirmation (new UI copy): `❌ No se pudo exportar: {error}`;
 `⏳ Iniciando...` now default log color (monolith `#ffcc44`).
 
@@ -293,7 +298,13 @@ Pending user confirmation (new UI copy): `❌ No se pudo exportar: {error}`;
 - T5b: RED observed for F9 (mutation tests), view and flet_app (ModuleNotFoundError).
   `pytest` 335 passed ×3, `ruff` clean, `mypy` clean (66 files), `lint-imports` 1 kept
   — both envs; import smoke opens no window; parent re-ran pytest in both, mypy,
-  lint-imports.
+  lint-imports. Commit cd00976. A power cut interrupted the first consent prompt; a
+  fresh START was obtained → granted → 1 lens → approved, acknowledged, burned (lineage
+  review-3eb8b9addc9864b0). Warnings became F10.
+- F10: RED observed (worker never signalled `0 == 1`; missing stop-failure log;
+  `ValueError: render broke` escaped `pump`). `pytest` 340 passed ×3, `ruff` clean,
+  `mypy` clean (66 files), `lint-imports` 1 kept; CI-like venv recreated after the
+  power cut (scratchpad wiped) — 340 passed, mypy clean, lint-imports 1 kept.
 
 ## Next step
 
